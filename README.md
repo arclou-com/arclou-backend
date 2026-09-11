@@ -397,13 +397,11 @@ Política desejada:
 - branch removida após merge;
 - bypass administrativo minimizado.
 
-### Projeto solo
+### Identidades separadas
 
-Se Claude usa a **mesma identidade/token GitHub do autor do PR**, não exigir aprovação independente de uma segunda pessoa se isso impedir o merge.
+Desde 2026-09-11, o projeto deixou de ser "solo" no sentido de identidade GitHub: o dev humano abre PRs como `vinicius3516` (colaborador, permissão Write) e o Tech Lead opera como `arclouai`. Como as identidades são distintas, o ruleset de `main` exige **1 aprovação obrigatória** antes do merge, e ninguém pode contornar o ruleset (nem admin).
 
-Nesse cenário, o Tech Lead ainda deve revisar e comentar no PR. A proteção real fica por PR + CI + resolução de conversas.
-
-Com uma conta bot/GitHub App separada no futuro, aprovação independente pode se tornar obrigatória.
+Se em algum momento só existir uma identidade novamente (ex.: `arclouai` autor e revisor do mesmo PR), volte à regra antiga: não configurar aprovação obrigatória que torne o merge impossível — a proteção real fica por PR + CI + resolução de conversas.
 
 ## 16. GitHub Project
 
