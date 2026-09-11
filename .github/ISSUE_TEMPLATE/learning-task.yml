@@ -1,0 +1,100 @@
+name: Learning Task
+description: Task normal de desenvolvimento do backlog (feature, refactor, test, docs, chore)
+title: "[V1.x] "
+labels: []
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Por que esta task existe? Qual parte do domínio/fluxo ela avança?
+    validations:
+      required: true
+
+  - type: textarea
+    id: learning-objective
+    attributes:
+      label: Learning objective
+      description: Qual conceito de Java/engenharia esta task pratica?
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: O que deve ser feito, exatamente.
+    validations:
+      required: true
+
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: O que NÃO deve ser feito nesta task (evita scope creep).
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance criteria
+      description: Lista verificável de comportamentos esperados.
+      value: |
+        - [ ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: technical-constraints
+    attributes:
+      label: Technical constraints
+      description: Limites técnicos (ex. "sem Collections ainda", "apenas tipos primitivos").
+    validations:
+      required: false
+
+  - type: input
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Issues das quais esta task depende (ex. "#12").
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - P0
+        - P1
+        - P2
+        - P3
+    validations:
+      required: true
+
+  - type: dropdown
+    id: size
+    attributes:
+      label: Size
+      options:
+        - XS
+        - S
+        - M
+        - L
+    validations:
+      required: true
+
+  - type: textarea
+    id: dod
+    attributes:
+      label: Definition of Done
+      value: |
+        - [ ] Acceptance criteria atendidos
+        - [ ] Código compila
+        - [ ] Testes relevantes passam
+        - [ ] CI passa
+        - [ ] PR aberto e revisado
+        - [ ] Documentação atualizada quando necessário
+    validations:
+      required: true
