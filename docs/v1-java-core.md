@@ -1,14 +1,14 @@
-# EventHub — V1 Java Core
+# Arclou — V1 Java Core
 
-> **Objetivo:** construir o núcleo funcional do EventHub usando exclusivamente Java, sem Spring Boot, banco de dados, API REST ou frameworks de infraestrutura.
+> **Objetivo:** construir o núcleo funcional do Arclou usando exclusivamente Java, sem Spring Boot, banco de dados, API REST ou frameworks de infraestrutura.
 >
-> **Princípio:** esta versão não pretende entregar o MVP web completo. Ela existe para transformar os requisitos do EventHub em um domínio de software real e, ao mesmo tempo, consolidar os fundamentos de Java.
+> **Princípio:** esta versão não pretende entregar o MVP web completo. Ela existe para transformar os requisitos do Arclou em um domínio de software real e, ao mesmo tempo, consolidar os fundamentos de Java.
 
 ---
 
 ## 1. Visão da V1
 
-A V1 representa a primeira implementação real do EventHub.
+A V1 representa a primeira implementação real do Arclou.
 
 O sistema será executado localmente pelo terminal (CLI) e armazenará os dados apenas em memória.
 
@@ -401,7 +401,7 @@ V1.10 → Testes
 V1.11 → V1 final
 ```
 
-Cada etapa adiciona uma capacidade real ao EventHub.
+Cada etapa adiciona uma capacidade real ao Arclou.
 
 ---
 
@@ -829,12 +829,12 @@ Consigo testar esta classe isoladamente?
 A estrutura final aproximada:
 
 ```text
-eventhub/
+arclou/
 │
 ├── src/
 │   ├── main/
 │   │   └── java/
-│   │       └── com/eventhub/
+│   │       └── com/arclou/
 │   │           │
 │   │           ├── domain/
 │   │           │   ├── User.java
@@ -1211,7 +1211,7 @@ V10 — Cloud + Distributed Architecture
 
 A regra principal:
 
-> **Aprender o conceito → aplicar no EventHub → refatorar o que já existe → documentar o aprendizado.**
+> **Aprender o conceito → aplicar no Arclou → refatorar o que já existe → documentar o aprendizado.**
 
 Não será:
 
@@ -1228,19 +1228,19 @@ Será:
 ```text
 Aprender variável
 ↓
-Aplicar no EventHub
+Aplicar no Arclou
 ↓
 Aprender método
 ↓
-Aplicar no EventHub
+Aplicar no Arclou
 ↓
 Aprender classe
 ↓
-Refatorar EventHub
+Refatorar Arclou
 ↓
 Aprender Collections
 ↓
-Aplicar no EventHub
+Aplicar no Arclou
 ↓
 ...
 ```
@@ -1352,7 +1352,7 @@ V1 COMPLETA
 V2 — SPRING BOOT
 ```
 
-**A V1 termina quando o domínio do EventHub funciona bem em Java puro.**
+**A V1 termina quando o domínio do Arclou funciona bem em Java puro.**
 
 Não quando ele parece uma aplicação web.
 
