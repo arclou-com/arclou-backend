@@ -41,6 +41,15 @@ public class Main {
 
                     System.out.println("Evento registrado com sucesso: " + event[count][0] + " | " + event[count][1] + " | " + event[count][2]);
                     count++;
+                } else if (option == 2) {
+                    if (count > 0) {
+                        System.out.println("Eventos cadastrados:");
+                        for (int i = 0; i < count; i++ ) {
+                            System.out.println("Nome: " + event[i][0] + ", Data: " + event[i][1] + ", Local: " + event[i][2]);
+                        }
+                    } else {
+                        System.out.println("Nenhum evento cadastrado.");
+                    }
                 } else if (option != 4){
                     System.out.println("Em construção...");
                 }
