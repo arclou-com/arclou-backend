@@ -1,5 +1,6 @@
 package com.arclou;
 
+import java.util.Locale;
 import java.util.Scanner;
 
 public class Main {
@@ -50,8 +51,25 @@ public class Main {
                     } else {
                         System.out.println("Nenhum evento cadastrado.");
                     }
-                } else if (option != 4){
-                    System.out.println("Em construção...");
+                } else if (option == 3){
+                    System.out.print("Pesquise pelo nome do evento...: ");
+                    String eventName = sc.nextLine();
+                    boolean found = false;
+
+                    for (int i=0; i < count; i++) {
+                        String nameTransform = event[i][0].toLowerCase();
+                        String searchNameTransform = eventName.toLowerCase();
+
+                        if (nameTransform.contains(searchNameTransform)) {
+                            System.out.println("Info. do Evento:");
+                            System.out.println("Nome: " + event[i][0] + ", Data: " + event[i][1] + ", Local: " + event[i][2]);
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        System.out.println("Evento não encontrado.");
+                    }
                 }
             } else {
                 String invalidInput = sc.next();
