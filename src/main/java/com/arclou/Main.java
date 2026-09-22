@@ -6,8 +6,9 @@ import java.util.Scanner;
 public class Main {
     public static void main(String[] args) {
         Scanner sc = new Scanner(System.in);
+        Locale.setDefault(Locale.US);
 
-        String[][] event = new String[10][3];
+        Event[] event = new Event[10];
         int count = 0;
         int option = 0;
 
@@ -32,21 +33,22 @@ public class Main {
                 } else if (option == 1){
                     System.out.println("Informe os dados do evento:");
                     System.out.print("Nome: ");
-                    event[count][0] = sc.nextLine();
+                    String name = sc.nextLine();
 
                     System.out.print("Data: ");
-                    event[count][1] = sc.nextLine();
+                    String date = sc.nextLine();
 
                     System.out.print("Local: ");
-                    event[count][2] = sc.nextLine();
+                    String local = sc.nextLine();
 
-                    System.out.println("Evento registrado com sucesso: " + event[count][0] + " | " + event[count][1] + " | " + event[count][2]);
+                    event[count] = new Event(name, date, local);
+                    System.out.println("Evento registrado com sucesso: " + event[count].getName() + " | " + event[count].getDate() + " | " + event[count].getLocal());
                     count++;
                 } else if (option == 2) {
                     if (count > 0) {
                         System.out.println("Eventos cadastrados:");
-                        for (int i = 0; i < count; i++ ) {
-                            System.out.println("Nome: " + event[i][0] + ", Data: " + event[i][1] + ", Local: " + event[i][2]);
+                        for (int i=0; i < count; i++ ) {
+                            System.out.println("Nome: " + event[i].getName() + ", Data: " + event[i].getDate() + ", Local: " + event[i].getLocal());
                         }
                     } else {
                         System.out.println("Nenhum evento cadastrado.");
@@ -57,12 +59,12 @@ public class Main {
                     boolean found = false;
 
                     for (int i=0; i < count; i++) {
-                        String nameTransform = event[i][0].toLowerCase();
+                        String nameTransform = event[i].getName().toLowerCase();
                         String searchNameTransform = eventName.toLowerCase();
 
                         if (nameTransform.contains(searchNameTransform)) {
                             System.out.println("Info. do Evento:");
-                            System.out.println("Nome: " + event[i][0] + ", Data: " + event[i][1] + ", Local: " + event[i][2]);
+                            System.out.println("Nome: " + event[i].getName() + ", Data: " + event[i].getDate() + ", Local: " + event[i].getLocal());
                             found = true;
                             break;
                         }
@@ -75,7 +77,6 @@ public class Main {
                 String invalidInput = sc.next();
                 System.out.println("Erro: '" + invalidInput + "' não é uma das opções acima.");
             }
-
         } while (option != 4);
 
         System.out.println("Obrigado!!!");
