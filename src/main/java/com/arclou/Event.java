@@ -5,10 +5,13 @@ public class Event {
     private String date;
     private String local;
 
-    public Event(String name, String date, String local) {
+    private User user;
+
+    public Event(String name, String date, String local, User user) {
         this.name = name;
         this.date = date;
         this.local = local;
+        this.user = user;
     }
 
     public String getName() {
@@ -21,5 +24,9 @@ public class Event {
 
     public String getLocal() {
         return local;
+    }
+
+    public User getUser() {
+        return user;
     }
 }

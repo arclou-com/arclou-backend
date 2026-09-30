@@ -31,6 +31,11 @@ public class Main {
                 if (option <= 0 || option > 4) {
                     System.out.println("Erro: As opções são somente entre 1 a 4.");
                 } else if (option == 1){
+                    System.out.println("Dados do Organizador:");
+                    System.out.print("Nome: ");
+                    String organName = sc.nextLine();
+                    System.out.print("E-mail: ");
+                    String organEmail = sc.nextLine();
                     System.out.println("Informe os dados do evento:");
                     System.out.print("Nome: ");
                     String name = sc.nextLine();
@@ -41,7 +46,7 @@ public class Main {
                     System.out.print("Local: ");
                     String local = sc.nextLine();
 
-                    event[count] = new Event(name, date, local);
+                    event[count] = new Event(name, date, local, new User(1, organName, organEmail));
                     System.out.println("Evento registrado com sucesso: " + event[count].getName() + " | " + event[count].getDate() + " | " + event[count].getLocal());
                     count++;
                 } else if (option == 2) {
@@ -49,6 +54,8 @@ public class Main {
                         System.out.println("Eventos cadastrados:");
                         for (int i=0; i < count; i++ ) {
                             System.out.println("Nome: " + event[i].getName() + ", Data: " + event[i].getDate() + ", Local: " + event[i].getLocal());
+                            System.out.println("Dados do Organizador:");
+                            System.out.println("Nome: " + event[i].getUser().getName() + " - " + "E-mail: " + event[i].getUser().getEmail());
                         }
                     } else {
                         System.out.println("Nenhum evento cadastrado.");
@@ -65,6 +72,8 @@ public class Main {
                         if (nameTransform.contains(searchNameTransform)) {
                             System.out.println("Info. do Evento:");
                             System.out.println("Nome: " + event[i].getName() + ", Data: " + event[i].getDate() + ", Local: " + event[i].getLocal());
+                            System.out.println("Dados do Organizador:");
+                            System.out.println("Nome: " + event[i].getUser().getName() + " - " + "E-mail: " + event[i].getUser().getEmail());
                             found = true;
                             break;
                         }
