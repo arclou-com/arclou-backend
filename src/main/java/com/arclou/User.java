@@ -22,4 +22,9 @@ public class User {
     public String getEmail() {
         return email;
     }
+
+    @Override
+    public String toString() {
+        return "Nome: " + name + " - " + "E-mail: " + email;
+    }
 }
