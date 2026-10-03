@@ -31,3 +31,6 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+# Claude (local only, never published)
+CLAUDE.md
