@@ -20,3 +20,19 @@ Risks:
 Expected outcome:
 `User` existe como classe (id, name, email). `Event` guarda uma referência ao `User` que o organizou (composição/associação real, não FK/id solto). Criar, listar e buscar evento continuam funcionando, agora exibindo o organizador. V1.2 fecha; RN02 fica pronta pra ser validada na V1.3.
 ```
+
+## Review
+
+- #19 e #20 entregues (PRs #21 e #22). V1.2 concluída: `Event` guarda o `User` organizador por composição.
+- #22 passou por 1 ciclo de *changes requested*: nome do atributo (`user` → `organizer`, critério de aceite) e id fixo do `User`.
+
+## Retrospective
+
+> Pontos observados pelo Tech Lead. O desenvolvedor pode complementar/ajustar via PR.
+
+- **What went well?** Composição feita com objeto (não id solto); `toString()` com `@Override` resolveu a duplicação de exibição.
+- **What was difficult?** Nomear pelo papel no domínio (`organizer`) em vez do tipo (`user`).
+- **What did we learn?** O nome do atributo documenta a relação; o critério de aceite precisa ser seguido à risca ou discutido antes.
+- **Where did estimates differ from reality?** #20 (M) exigiu um ciclo extra de review.
+- **What process should change?** Criar a branch antes de começar a task (o commit da #20 nasceu na `main` local); marcar "N/A" no checklist quando não houver testes; conferir se o `Closes #N` foi reconhecido pelo GitHub.
+- **What technical debt was created?** Id do `User` derivado da posição do evento no array → endereçado pela #23 (RN13).
