@@ -10,6 +10,7 @@
 
 - O **Figma** é a referência visual e de fluxo (o que a pessoa vê e faz).
 - Este documento é a referência de **regras, dados e versão**: para cada tela, quais regras de negócio ela exige e a partir de qual versão do backend ela pode existir de verdade.
+- [`docs/modelo-de-dominio.md`](modelo-de-dominio.md) diz quais campos cada entidade tem e em que versão entram.
 - `docs/v1-java-core.md` continua sendo a especificação detalhada da V1. Quando uma tela depender de algo que a V1 ainda não modela, isso aparece aqui como regra futura (RN16+), nunca como mudança silenciosa da V1.
 
 Regra de manutenção:
@@ -88,7 +89,7 @@ Legenda de versão: a coluna **Backend** indica a primeira versão em que a tela
 | PN-A1 | Primeiro acesso (0/3) | Onboarding: criar evento → configurar ingressos → publicar (RN03, RN04) | V2 |
 | PN-A2 | Evento criado (1/3) | Evento em `DRAFT` sem tipos de ingresso | V2 |
 | PN-A3 | Evento publicado · sem vendas | Evento `PUBLISHED`, nenhum pedido | V2 |
-| PN-A4 | Painel com dados | Receita, ingressos vendidos, alertas (lote quase esgotado, pedidos pendentes, rascunho sem ingressos), próximos eventos, pedidos recentes | V3 |
+| PN-A4 | Painel com dados | Receita, ingressos vendidos, alertas (lote quase esgotado, pedidos pendentes, rascunho sem ingressos), próximos eventos, pedidos recentes | V3 / conversão: V8 (até lá o card não aparece) |
 
 #### 📱 Eventos — `EV`
 
@@ -103,9 +104,9 @@ Legenda de versão: a coluna **Backend** indica a primeira versão em que a tela
 | EV-B1–B2 | Novo evento (vazio / validação) | Nome obrigatório (RN01); validação no topo + campo em erro | V2 (validação com exceptions: V1.5) |
 | EV-B3 | 1. Detalhes | Nome, categoria, formato, descrição, classificação etária, idioma, capa | V2 / capa: V3 |
 | EV-B4–B6 | 2. Data e local (Online / Presencial / Híbrido) | Início e término; endereço com mapa; link de transmissão | V2 |
-| EV-B7 | 3. Ingressos | Tipos com nome, preço ≥ 0 (RN08), quantidade > 0 (RN07) e fila de espera por tipo (RN22); resumo considera a taxa repassada ao comprador por padrão (RN17) | V2 / fila: V6 |
+| EV-B7 | 3. Ingressos | Tipos com nome, preço ≥ 0 (RN08), quantidade > 0 (RN07), janela de vendas (lotes, RN40), exige documento (RN41) e fila de espera (RN22); resumo considera a taxa repassada ao comprador por padrão (RN17) | V2 / janela: V3 / documento: V5 / fila: V6 |
 | EV-B8–B9 | 4. Revisão e publicação / Confirmar | Publicar exige ≥ 1 tipo de ingresso (RN04) | V2 |
-| EV-C1 | Detalhe · Visão geral | KPIs, alertas, tipos de ingresso, gráfico de vendas, pedidos recentes | V3 |
+| EV-C1 | Detalhe · Visão geral | KPIs, alertas, tipos de ingresso, gráfico de vendas, pedidos recentes | V3 / conversão: V8 |
 | EV-C2 | Detalhe · Ingressos | Vendidos / total por tipo; disponível = total − vendido; estado da fila de espera de cada tipo (RN22) | V2 / fila: V6 |
 | EV-C3 | Detalhe · Pedidos | Pedidos do evento por status | V2 |
 | EV-C4 | Detalhe · Participantes | Titulares dos ingressos; dados pessoais (LGPD) | V3 |
@@ -160,7 +161,7 @@ Aba **Mais** do Tab bar: conta, produtora e suporte. O perfil e o "Sair da conta
 |---|---|---|---|
 | CF-A1 | Menu de seções | Geral, Notificações, Pagamentos, Equipe, Integrações, Segurança (aberto a partir de MA-A1) | V2 |
 | CF-A2 | Geral | Idioma, fuso, moeda, formato de data; padrões de novos eventos: limite por pedido (RN19), política de reembolso (RN24), repassar taxa ao comprador (RN17), fila de espera em tipos novos (RN22) | V3 |
-| CF-A3 | Notificações | Canais (e-mail, push, SMS) e eventos (novo pedido, pendente > 24 h, reembolso, lote 90%, esgotado, lembrete) | V6 |
+| CF-A3 | Notificações | Canais (e-mail e push — sem SMS) e eventos (novo pedido, pendente > 24 h, reembolso, lote 90%, esgotado, lembrete) | V6 |
 | CF-A4 | Pagamentos e repasses | Saldo disponível / a liberar, dados bancários, frequência de repasse, histórico, taxas | V5 |
 | CF-A5 | Equipe | Papéis: Proprietário, Administrador, Financeiro, Check-in; convites | V4 |
 | CF-A6 | Integrações | Webhooks, chaves de API, pixels de marketing | V4 (chaves) / V6 (webhooks) |
@@ -262,12 +263,16 @@ Estas regras nasceram do design. **Nenhuma entra na V1.** Cada uma será refinad
 | **RN31 — Redefinição de senha** | O link de redefinição vale 30 minutos e só pode ser usado uma vez. A resposta ao pedido é sempre a mesma, exista ou não a conta. | AC-A3, AC-A4, AC-A5, AC-B5 | V4 |
 | **RN32 — Confirmação de e-mail** | Toda conta nova confirma o e-mail com um código de 6 dígitos antes de comprar ou publicar. | AC-A2, AC-A7, AC-B3 | V4 |
 | **RN33 — Convite de equipe** | O convite é enviado para um e-mail específico, define o papel (Proprietário, Administrador, Financeiro, Check-in) e expira em 7 dias. Só esse e-mail pode aceitá-lo. | CF-A5, AC-B4 | V4 |
-| **RN34 — Conta por superfície** | Cadastro no site cria `PARTICIPANT`; cadastro no app cria `ORGANIZER` e a produtora, com a pessoa como Proprietária. | AC-A2, AC-B3 | V4 |
+| **RN34 — Conta única** | Uma conta serve para comprar ingressos e para trabalhar em produtoras (ADR-0003). Cadastro no app cria a conta **e** a produtora, com a pessoa como Proprietária; cadastro no site cria só a conta. A mesma conta entra nas duas superfícies. | AC-A2, AC-B3 | V4 |
 | **RN35 — Check-in** | Só tickets `ISSUED` do próprio evento entram, a partir da abertura do check-in (padrão: 2 h antes do início). A leitura válida muda o ticket para `USED` e registra horário, portão e pessoa da equipe. O portão organiza filas e relatórios; não muda a validade do ticket. | CK-A2, CK-A3, CK-A7 | V5 |
 | **RN36 — Sem reentrada** | `USED` é final. Nova leitura do mesmo ticket é recusada e registrada como ocorrência. | CK-A4, EV-C5 | V5 |
 | **RN37 — Check-in offline** | O app baixa a lista de tickets do evento e valida localmente sem internet, sincronizando depois. Se o mesmo ticket for lido em dois aparelhos offline, vale a leitura mais antiga; a outra vira ocorrência recusada. | CK-A1, CK-A7, CK-A8 | V7 |
-| **RN38 — Meia-entrada** | Tickets de tipo meia-entrada (ex.: Estudante) exigem que a equipe confira o documento e toque em "Liberar entrada"; só então viram `USED`. Recusar não altera o ticket. | CK-A3 (carteirinha), EV-C5 | V5 |
+| **RN38 — Meia-entrada** | Tickets de tipos marcados com "exige documento" (RN41 — ex.: meia-entrada) exigem que a equipe confira o documento e toque em "Liberar entrada"; só então viram `USED`. Recusar não altera o ticket. | CK-A3 (carteirinha), EV-C5 | V5 |
 | **RN39 — Validação manual** | Sem QR, a equipe busca o ticket por nome, e-mail ou número, confere documento com foto e valida; a leitura fica marcada como manual. | CK-A6 | V5 |
+| **RN40 — Lotes** | Um lote é um tipo de ingresso com janela de vendas (início e fim). "Criar 2º lote" cria um novo tipo, com novo preço e quantidade. Fora da janela, o tipo não aparece para compra. Abrir o próximo lote automaticamente ao esgotar o anterior fica para depois. | EV-B7, EV-C2, PT-A2 | V3 |
+| **RN41 — Exige documento** | Um tipo de ingresso pode ser marcado como "exige documento na entrada" (meia-entrada, PCD e similares). A página do evento avisa o comprador, e o check-in pede conferência (RN38). | EV-B7, PT-A2, CK-A3 | V5 |
+| **RN42 — Documento do comprador** | O CPF é pedido só no checkout (não no cadastro), fica no pedido e aparece mascarado para a produtora (LGPD). | PT-B2, PD-A2 | V5 |
+| **RN15 (revisão na V4)** | Com a produtora (ADR-0003), a RN15 passa a ser: um usuário só gerencia eventos das produtoras de que é membro, dentro do que o papel permite. | CF-A5, EV-* | V4 |
 
 ### Ressalvas importantes para a V1
 
