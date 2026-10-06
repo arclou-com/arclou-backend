@@ -24,4 +24,6 @@ O que foi decidido?
 O que isso implica, positivo e negativo?
 ```
 
-Nenhum ADR foi necessário até o momento.
+| ADR | Título | Status |
+|---|---|---|
+| [0001](0001-superficies-do-produto.md) | Superfícies do produto: app mobile do organizador e web responsivo do participante | Accepted |

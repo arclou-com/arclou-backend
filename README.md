@@ -15,6 +15,13 @@ Ao longo das versões, o Arclou deverá permitir:
 - administração da plataforma;
 - evolução gradual para pagamentos, mensageria, cache, observabilidade, CI/CD, cloud e arquitetura distribuída.
 
+### Superfícies e design
+O produto final tem duas superfícies ([ADR-0001](docs/adr/0001-superficies-do-produto.md)):
+- **App do organizador** — mobile-only;
+- **Site do participante** — web responsivo (desktop, tablet e mobile).
+
+Todas as telas estão desenhadas no [Figma](https://www.figma.com/design/jFLXJ5S0eonNsXzx5ULmUu/Arclou). O contrato entre o design e o que é desenvolvido aqui — telas, regras de negócio e a versão em que cada uma passa a existir — fica em [`docs/produto-e-design.md`](docs/produto-e-design.md). O que está no Figma precisa bater com esse documento.
+
 ### Aprendizado
 Usar a mesma base de código para evoluir de fundamentos de Java até engenharia backend moderna.
 
@@ -162,7 +169,7 @@ Consultar pedidos/tickets
 Especificação detalhada:
 
 ```text
-docs/V1-JAVA-CORE.md
+docs/v1-java-core.md
 ```
 
 ## 6. Progressão interna da V1
@@ -614,7 +621,8 @@ CONTRIBUTING.md
 SECURITY.md
 
 docs/
-├── V1-JAVA-CORE.md
+├── v1-java-core.md
+├── produto-e-design.md
 ├── roadmap/
 ├── architecture/
 ├── adr/
