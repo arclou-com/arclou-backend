@@ -61,6 +61,8 @@ As telas usam rótulos em português. O código usa os enums do domínio. A corr
 | `OrderStatus.CANCELLED` | Cancelado | Neutro |
 | `TicketStatus.SOLD` | Emitido | Sucesso |
 
+**A partir da V5** (ADR-0002), o ticket passa a ter o ciclo `ISSUED` (Emitido · Sucesso) → `USED` (Utilizado · Neutro) ou `CANCELLED` (Cancelado · Neutro). A V1 mantém `AVAILABLE`/`SOLD`.
+
 Estados que aparecem nas telas mas **ainda não existem no domínio** estão na seção 6 (decisões em aberto) ou nas regras futuras (seção 5).
 
 ---
@@ -99,7 +101,7 @@ Legenda de versão: a coluna **Backend** indica a primeira versão em que a tela
 | EV-C2 | Detalhe · Ingressos | Vendidos / total por tipo; disponível = total − vendido | V2 |
 | EV-C3 | Detalhe · Pedidos | Pedidos do evento por status | V2 |
 | EV-C4 | Detalhe · Participantes | Titulares dos ingressos; dados pessoais (LGPD) | V3 |
-| EV-C5 | Detalhe · Check-in (pré-evento) | Equipe de check-in e abertura do check-in | V4 (ver seção 6) |
+| EV-C5 | Detalhe · Check-in (pré-evento) | Abertura do check-in (2 h antes do início); entradas por tipo; regras de validação: busca manual, modo offline, alerta de Estudante e **sem reentrada (sempre ativo)**; a equipe usa o mesmo app (ADR-0002) | V4 |
 | EV-D1 | Menu ⋯ do evento (Publicado) | Duplicar, copiar link, QR code, exportar · pausar, encerrar vendas · cancelar | V2 |
 | EV-D2 | Copiar link | Toast; link público `arclou.com/e/<slug>` | V2 |
 | EV-D3 | Duplicar evento | Cópia nasce como `DRAFT` (RN03) | V2 |
@@ -207,6 +209,22 @@ Duas superfícies, dois cadastros: o **site cria contas `PARTICIPANT`**; o **app
 | AC-B4 | Aceitar convite | E-mail do convite é fixo; papel e permissões visíveis antes de aceitar; convite expira em 7 dias (RN33) | V4 |
 | AC-B5 | Esqueci a senha | Envia o link; a nova senha é criada na web (AC-A5); 2FA continua exigida depois | V4 |
 
+### 4.4 Check-in (página 📱 Check-in) — `CK`
+
+No app do organizador. Quem tem o papel Check-in entra direto nestas telas (sem Tab bar); organizadores abrem pelo detalhe do evento. Decisões em [`ADR-0002`](adr/0002-ciclo-de-vida-do-ticket-e-check-in.md).
+
+| Código | Tela | Regras / dados | Backend |
+|---|---|---|---|
+| CK-A1 | Escolher evento e portão | Só eventos com check-in aberto; portão (A · Pista e Estudante, B · Área VIP) com contagem; lista para uso offline | V5 |
+| CK-A2 | Scanner | Leitura do QR; contador de presentes; estado da conexão | V5 |
+| CK-A3 | Entrada liberada | `ISSUED` → `USED` (RN35); registra horário, portão e quem validou | V5 |
+| CK-A3 | Conferir carteirinha | Ingresso de meia-entrada: só vira `USED` depois de "Liberar entrada" (RN38) | V5 |
+| CK-A4 | Já utilizado | Ticket `USED`: entrada recusada, mostra quando/onde/quem (RN36) | V5 |
+| CK-A5 | Ingresso inválido | Outro evento, `CANCELLED` ou QR desconhecido: entrada recusada | V5 |
+| CK-A6 | Busca manual | Por nome, e-mail ou nº do ingresso; exige conferir documento com foto; registrada como manual (RN39) | V5 |
+| CK-A7 | Painel ao vivo | Aba Check-in do evento no dia: presentes por tipo e por portão, equipe online, ocorrências (inclui conflito offline) | V5 / V8 (métricas) |
+| CK-A8 | Sem internet | Valida com a lista baixada; leituras aguardando envio (RN37) | V7 |
+
 ---
 
 ## 5. Regras previstas para versões futuras
@@ -234,6 +252,11 @@ Estas regras nasceram do design. **Nenhuma entra na V1.** Cada uma será refinad
 | **RN32 — Confirmação de e-mail** | Toda conta nova confirma o e-mail com um código de 6 dígitos antes de comprar ou publicar. | AC-A2, AC-A7, AC-B3 | V4 |
 | **RN33 — Convite de equipe** | O convite é enviado para um e-mail específico, define o papel (Proprietário, Administrador, Financeiro, Check-in) e expira em 7 dias. Só esse e-mail pode aceitá-lo. | CF-A5, AC-B4 | V4 |
 | **RN34 — Conta por superfície** | Cadastro no site cria `PARTICIPANT`; cadastro no app cria `ORGANIZER` e a produtora, com a pessoa como Proprietária. | AC-A2, AC-B3 | V4 |
+| **RN35 — Check-in** | Só tickets `ISSUED` do próprio evento entram, a partir da abertura do check-in (padrão: 2 h antes do início). A leitura válida muda o ticket para `USED` e registra horário, portão e pessoa da equipe. O portão organiza filas e relatórios; não muda a validade do ticket. | CK-A2, CK-A3, CK-A7 | V5 |
+| **RN36 — Sem reentrada** | `USED` é final. Nova leitura do mesmo ticket é recusada e registrada como ocorrência. | CK-A4, EV-C5 | V5 |
+| **RN37 — Check-in offline** | O app baixa a lista de tickets do evento e valida localmente sem internet, sincronizando depois. Se o mesmo ticket for lido em dois aparelhos offline, vale a leitura mais antiga; a outra vira ocorrência recusada. | CK-A1, CK-A7, CK-A8 | V7 |
+| **RN38 — Meia-entrada** | Tickets de tipo meia-entrada (ex.: Estudante) exigem que a equipe confira o documento e toque em "Liberar entrada"; só então viram `USED`. Recusar não altera o ticket. | CK-A3 (carteirinha), EV-C5 | V5 |
+| **RN39 — Validação manual** | Sem QR, a equipe busca o ticket por nome, e-mail ou número, confere documento com foto e valida; a leitura fica marcada como manual. | CK-A6 | V5 |
 
 ### Ressalvas importantes para a V1
 
@@ -246,9 +269,7 @@ Estas regras nasceram do design. **Nenhuma entra na V1.** Cada uma será refinad
 
 | Tema | Situação | Impacto |
 |---|---|---|
-| **Ciclo de vida do ticket: utilizado e cancelado** | O domínio só tem `AVAILABLE` e `SOLD`. Check-in exige um estado de "utilizado"; reembolso e cancelamento de evento exigem um estado de "cancelado" (rótulo já usado em PD-A5). **Decidido:** os dois estados serão definidos juntos, no planejamento da V5. Telas de check-in no dia do evento só serão desenhadas depois disso. | Domínio, EV-C5, PD-A5, futuro app de check-in |
 | **Fila de espera no formulário do evento** | RN22 é configurável por evento, mas o formulário EV-B ainda não tem esse campo (só o padrão em CF-A2). | EV-B3 |
-| **Status de ticket transferido** | Hoje modelado como troca de titular (RN23), sem status novo. Confirmar ao implementar a V4. | Domínio |
 
 ---
 

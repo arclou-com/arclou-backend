@@ -27,3 +27,4 @@ O que isso implica, positivo e negativo?
 | ADR | Título | Status |
 |---|---|---|
 | [0001](0001-superficies-do-produto.md) | Superfícies do produto: app mobile do organizador e web responsivo do participante | Accepted |
+| [0002](0002-ciclo-de-vida-do-ticket-e-check-in.md) | Ciclo de vida do ticket e check-in | Accepted |
