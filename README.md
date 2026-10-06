@@ -623,6 +623,7 @@ SECURITY.md
 docs/
 ├── v1-java-core.md
 ├── produto-e-design.md
+├── modelo-de-dominio.md
 ├── roadmap/
 ├── architecture/
 ├── adr/
