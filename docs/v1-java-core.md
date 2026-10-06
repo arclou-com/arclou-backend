@@ -404,7 +404,7 @@ O Figma desenha o produto final. Dois pontos são intencionalmente mais simples 
 
 ### Regras previstas para versões futuras
 
-As regras RN16 a RN29 nasceram do design (exclusão de rascunho, taxa de serviço, vendas pausadas, limite por pedido, reserva de estoque, expiração de pedido pendente, fila de espera, transferência, reembolsos, titular por ingresso, exclusão de conta e reembolsos total e parcial pelo organizador).
+As regras RN16 a RN34 nasceram do design (exclusão de rascunho, taxa de serviço, vendas pausadas, limite por pedido, reserva de estoque, expiração de pedido pendente, fila de espera, transferência, reembolsos, titular por ingresso, exclusão de conta, reembolsos total e parcial pelo organizador e regras de acesso).
 
 **Nenhuma delas faz parte da V1.** A descrição, as telas relacionadas e a versão de cada uma estão em `docs/produto-e-design.md`, seção 5.
 
