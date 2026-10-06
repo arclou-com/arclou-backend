@@ -178,6 +178,8 @@ Papel
 
 Não haverá autenticação real. A CLI poderá trabalhar com um usuário selecionado no contexto da execução.
 
+> **Evolução (ADR-0003):** a partir da V4, eventos passam a pertencer a uma **produtora** e "organizador" deixa de ser papel do usuário — vira vínculo (`Membership`) com a produtora. Na V1, `Event.organizer` continua sendo um `User` e os três papéis acima continuam valendo. Detalhes por versão em `docs/modelo-de-dominio.md`.
+
 ### 4.2 Eventos
 
 Um organizador poderá:
@@ -404,7 +406,7 @@ O Figma desenha o produto final. Dois pontos são intencionalmente mais simples 
 
 ### Regras previstas para versões futuras
 
-As regras RN16 a RN39 nasceram do design (exclusão de rascunho, taxa de serviço, vendas pausadas, limite por pedido, reserva de estoque, expiração de pedido pendente, fila de espera, transferência, reembolsos, titular por ingresso, exclusão de conta, reembolsos total e parcial pelo organizador regras de acesso e check-in).
+As regras RN16 a RN42 nasceram do design (exclusão de rascunho, taxa de serviço, vendas pausadas, limite por pedido, reserva de estoque, expiração de pedido pendente, fila de espera, transferência, reembolsos, titular por ingresso, exclusão de conta, reembolsos total e parcial pelo organizador regras de acesso, check-in, lotes e documentos).
 
 **Nenhuma delas faz parte da V1.** A descrição, as telas relacionadas e a versão de cada uma estão em `docs/produto-e-design.md`, seção 5.
 
