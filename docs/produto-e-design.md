@@ -131,7 +131,7 @@ Aba **Mais** do Tab bar: conta, produtora e suporte. O perfil e o "Sair da conta
 | MA-A1 | Menu | Perfil; Produtora (página pública, equipe, pagamentos); Conta (configurações, segurança); Suporte (ajuda, falar com o suporte, termos e privacidade); sair | V2 |
 | MA-A2 | Página pública | Logo, capa, nome, endereço da página (`/o/<slug>`; mudar quebra links já compartilhados), cidade, sobre (até 300 caracteres), redes e contato, o que exibir (eventos realizados, contagem de ingressos vendidos) | V3 |
 | MA-A3 | Central de ajuda | Busca, categorias, artigos mais buscados, atalho para o suporte | V3 (conteúdo estático) |
-| MA-A4 | Artigo de ajuda | Conteúdo precisa citar as regras vigentes (ex.: repasse 2 dias após o evento, semanal; taxa RN17) — mudou a regra, muda o artigo | V3 |
+| MA-A4 | Artigos de ajuda (mais buscados) | 5 artigos, um por item da lista de MA-A3. O conteúdo cita as regras vigentes — mudou a regra, muda o artigo: **Repasses** (liberação 2 dias após o evento, repasse semanal, RN17) · **Reembolsar pedido** (RN28, RN29; exemplo do parcial do #1042) · **Por que não posso publicar** (RN01, RN04, RN07, RN08; exemplo do Workshop) · **Pausar ou encerrar vendas** (RN18, comparado com cancelar/RN25) · **Convidar para a equipe** (RN33; papéis com o mesmo texto de CF-A5) | V3 |
 | MA-A5 | Falar com o suporte | Assunto, evento e pedido relacionados, mensagem (até 2.000 caracteres), anexo (JPG, PNG, PDF até 10 MB), histórico de chamados | V3 / anexo: V3 |
 | MA-A6 | Mensagem enviada | Protocolo do chamado; resposta por e-mail em até 1 dia útil | V6 (e-mail) |
 
