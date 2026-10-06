@@ -317,6 +317,18 @@ AVAILABLE
 SOLD
 ```
 
+### Rótulos nas telas
+
+As telas do Figma mostram esses estados em português. A correspondência é fixa e deve ser usada nas mensagens da CLI:
+
+| Enum | Rótulo |
+|---|---|
+| `DRAFT` / `PUBLISHED` / `CANCELLED` / `FINISHED` | Rascunho / Publicado / Cancelado / Encerrado |
+| `PENDING` / `CONFIRMED` / `CANCELLED` (pedido) | Pendente / Confirmado / Cancelado |
+| `SOLD` (ticket) | Emitido |
+
+Um status de ticket "utilizado" (check-in) **não existe** na V1 e ainda é uma decisão em aberto — ver `docs/produto-e-design.md`, seção 6.
+
 ---
 
 ## 6. Regras de negócio
@@ -382,6 +394,19 @@ Não cadastrar dois usuários com o mesmo e-mail.
 ### RN15 — Isolamento conceitual do organizador
 
 Um organizador só gerencia os próprios eventos.
+
+### Ressalvas da V1 em relação ao design
+
+O Figma desenha o produto final. Dois pontos são intencionalmente mais simples na V1:
+
+- **RN10 sem taxa:** na V1, `total = soma(quantidade × preço unitário)`. A taxa de serviço que aparece no site do participante (RN17) só entra na V5. O valor que o organizador vê no app é sempre esse subtotal.
+- **Participante do ticket = comprador:** na V1, todo ticket pertence a quem fez o pedido. Titular diferente por ingresso (RN26) e transferência (RN23) chegam na V4.
+
+### Regras previstas para versões futuras
+
+As regras RN16 a RN27 nasceram do design (exclusão de rascunho, taxa de serviço, vendas pausadas, limite por pedido, reserva de estoque, expiração de pedido pendente, fila de espera, transferência, reembolsos, titular por ingresso e exclusão de conta).
+
+**Nenhuma delas faz parte da V1.** A descrição, as telas relacionadas e a versão de cada uma estão em `docs/produto-e-design.md`, seção 5.
 
 ---
 
@@ -1310,7 +1335,7 @@ Quando chegar ao Spring Boot, ele não será "o sistema". Será uma nova camada 
 # 28. Próxima etapa
 
 ```text
-V1-JAVA-CORE.md
+v1-java-core.md
        │
        ▼
 Java básico
