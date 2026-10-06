@@ -40,7 +40,14 @@ Navegação do site do participante (Site Header): busca, **Meus ingressos** e c
 
 ### Design system
 
-- Cores, espaçamento e raios são **variáveis** no Figma (`Arclou / Color`, `Arclou / Scale`). Tema único escuro; a cor de marca é `primary/600` (#D4FF69).
+- Cores, espaçamento e raios são **variáveis** no Figma (`Arclou / Color`, `Arclou / Scale`). Nenhuma cor é definida solta nas telas.
+- **Base escura:** fundo `bg/page` **#1D1D1B** (quase-preto quente), cards `bg/surface` #262624, texto #F0F0F0 / #B1AFAF.
+- **Cor de marca:** `primary/600` **#68F9D8** (menta), com `primary/on` #111111 para texto sobre ela.
+- **Folha clara** (modo de variável `Folha clara`): nas telas principais de cada aba (Painel, Eventos, Pedidos, Mais), o topo fica escuro (saudação, abas, números em destaque) e o conteúdo vem numa **folha branca** com cantos de 28 px. Dentro da folha:
+  - os tokens se invertem (fundo branco, texto #111111, bordas claras, status em versões para fundo branco);
+  - a cor primária vira **#087A63** (menta escura), porque a menta viva sobre branco não passa em contraste — a menta viva fica só nas áreas escuras;
+  - um bloco de destaque pode voltar ao modo escuro (**card invertido**), como o gráfico de Vendas no Painel.
+- Telas de detalhe, formulários, sheets e o site do participante continuam na base escura.
 - Componentes reutilizáveis ficam nas páginas de componentes do Figma (Button, Badge, Text Field, Menu Item, Toast, Site Header, Event Card · Public…).
 - QR codes e códigos de barras são sempre **preto no branco**, independentemente do tema, para garantir leitura.
 
