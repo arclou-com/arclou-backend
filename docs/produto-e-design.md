@@ -30,7 +30,7 @@ Decisão registrada em [`docs/adr/0001-superficies-do-produto.md`](adr/0001-supe
 
 | Superfície | Quem usa | Formato | Páginas no Figma |
 |---|---|---|---|
-| **App do organizador** | `ORGANIZER` e sua equipe | Aplicativo **mobile-only** (430 px de referência), tema escuro | 📱 Painel · 📱 Eventos · 📱 Perfil · 📱 Configurações |
+| **App do organizador** | `ORGANIZER` e sua equipe | Aplicativo **mobile-only** (430 px de referência), tema escuro | 📱 Painel · 📱 Eventos · 📱 Pedidos · 📱 Perfil · 📱 Configurações |
 | **Site do participante** | `PARTICIPANT` e visitantes | **Web responsivo**: Desktop 1728 · Tablet 1024 · Mobile 430 | 🌐 Participante (web) |
 | Administração da plataforma | `SUPER_ADMIN` | — | Fora do escopo de design por enquanto |
 
@@ -109,6 +109,18 @@ Legenda de versão: a coluna **Backend** indica a primeira versão em que a tela
 | EV-D7 | Encerrar vendas | Irreversível para vendas; evento segue `PUBLISHED` até acontecer (RN18) | V2 |
 | EV-D8 | Cancelar evento | `CANCELLED` (RN06/RN12); reembolso de todos os pedidos confirmados (RN25); digitar CANCELAR | V2 / reembolso: V5 |
 
+#### 📱 Pedidos — `PD`
+
+Aba **Pedidos** do Tab bar: todos os pedidos da produtora, de todos os eventos. No app, o valor de um pedido é sempre o **subtotal dos ingressos** (o que o organizador recebe); a taxa de serviço aparece separada, como paga pelo comprador.
+
+| Código | Tela | Regras / dados | Backend |
+|---|---|---|---|
+| PD-A1 | Lista | Abas por status (contagem só em Pendentes); filtro por evento; alerta de pendentes há mais de 24 h; agrupado por dia | V2 / filtros: V3 |
+| PD-A2 | Pedido confirmado | Comprador, tickets emitidos com titular (RN11, RN26), pagamento (subtotal, taxa, total pago, valor a receber), histórico, liberação para repasse 2 dias após o evento | V2 / pagamento: V5 |
+| PD-A3 | Pedido pendente | Ingressos reservados, ainda não emitidos (RN11); vencimento do boleto (RN21); reenviar boleto; cancelar pedido | V5 |
+| PD-A4 | Reembolsar | Total ou parcial; motivo; impacto: devolução ao comprador, desconto no saldo, ingressos invalidados e devolvidos ao estoque (RN28) | V5 |
+| PD-A5 | Pedido reembolsado | Pedido `CANCELLED`; tickets invalidados; prazo da devolução | V5 |
+
 #### 📱 Perfil — `PF`
 
 | Código | Tela | Regras / dados | Backend |
@@ -174,6 +186,7 @@ Estas regras nasceram do design. **Nenhuma entra na V1.** Cada uma será refinad
 | **RN25 — Reembolso no cancelamento** | Cancelar um evento reembolsa todos os pedidos confirmados pelo mesmo meio de pagamento e avisa os participantes. | EV-D8 | V5 / V6 |
 | **RN26 — Titular por ingresso** | Cada ticket tem um titular (nome). Por padrão é o comprador; pode ser outra pessoa. | PT-B2, PT-C2, EV-C4 | V4 |
 | **RN27 — Exclusão de conta** | Conta de organizador só pode ser excluída sem eventos à venda, sem saldo a liberar e sem ser proprietária de equipe. Dados pessoais são apagados em até 30 dias (LGPD); registros fiscais são mantidos pelo prazo legal. | PF-A4 | V4 / V5 |
+| **RN28 — Reembolso feito pelo organizador** | O comprador recebe o valor integral que pagou (ingressos + taxa de serviço) pelo mesmo meio de pagamento, em até 7 dias úteis. O organizador tem descontado apenas o subtotal dos ingressos do saldo a liberar. Reembolso total cancela o pedido (`CANCELLED`) e invalida todos os tickets, que voltam ao estoque. | PD-A4, PD-A5 | V5 |
 
 ### Ressalvas importantes para a V1
 
@@ -190,6 +203,8 @@ Estas regras nasceram do design. **Nenhuma entra na V1.** Cada uma será refinad
 | **Fila de espera no formulário do evento** | RN22 é configurável por evento, mas o formulário EV-B ainda não tem esse campo (só o padrão em CF-A2). | EV-B3 |
 | **Status de ticket transferido** | Hoje modelado como troca de titular (RN23), sem status novo. Confirmar ao implementar a V4. | Domínio |
 | **Página pública do organizador** | `arclou.com/o/<slug>` aparece no Perfil e no menu ⋯ da lista, mas ainda não foi desenhada. | PT (nova tela) |
+| **Ticket cancelado** | Reembolso e cancelamento de evento invalidam tickets (rótulo "Cancelado" em PD-A5), mas `TicketStatus` não tem esse estado. | Domínio (V5) |
+| **Reembolso parcial** | PD-A4 oferece reembolso parcial (escolher ingressos). Falta definir: o pedido continua `CONFIRMED` com menos tickets? Como fica o total? A tela de seleção ainda não foi desenhada. | Domínio, PD-A4 |
 
 ---
 
@@ -200,3 +215,5 @@ As telas usam um conjunto fixo de dados para que os números batam entre si. Use
 - **Tech Summit 2026** — Publicado · seg, 12 out 2026, 09:00–18:00 · Expo Center Norte, São Paulo/SP · 500 ingressos, 412 vendidos · Pista R$ 60,00 (260/300) · VIP R$ 160,00 (92/100) · Estudante R$ 44,00 (60/100).
 - **Noite do Jazz** — Publicado, esgotado (180/180). **Meetup Backend BR** — Publicado, gratuito. **Workshop Java Moderno** — Rascunho. **Show Beneficente** — Cancelado. **DevConf 2026** — Encerrado.
 - **Pedido #1042** — Ana Souza, 2× VIP, R$ 320,00 (subtotal) / R$ 345,60 (com taxa), Pix, Confirmado; tickets #10421 (Ana Souza) e #10422 (Bruno Souza).
+- **Outros pedidos do Tech Summit** — #1041 Léo Martins, 1× Pista, R$ 60,00, boleto, Pendente · #1040 Carla Dias, 4× Pista, R$ 240,00 · #1039 Rafael Lima, 1× Estudante, R$ 44,00 · #1038 Bruno Alves, 1× VIP + 1× Pista, R$ 220,00 · #1037 Marina Costa, 2× Pista, R$ 120,00, Cancelado (cartão recusado).
+- **Pendentes da produtora:** 14 (6 do Tech Summit + 8 do Noite do Jazz), número usado no alerta do Painel e na aba Pedidos.
