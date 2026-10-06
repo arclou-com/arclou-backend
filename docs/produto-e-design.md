@@ -95,10 +95,10 @@ Legenda de versão: a coluna **Backend** indica a primeira versão em que a tela
 | EV-B1–B2 | Novo evento (vazio / validação) | Nome obrigatório (RN01); validação no topo + campo em erro | V2 (validação com exceptions: V1.5) |
 | EV-B3 | 1. Detalhes | Nome, categoria, formato, descrição, classificação etária, idioma, capa | V2 / capa: V3 |
 | EV-B4–B6 | 2. Data e local (Online / Presencial / Híbrido) | Início e término; endereço com mapa; link de transmissão | V2 |
-| EV-B7 | 3. Ingressos | Tipos com nome, preço ≥ 0 (RN08), quantidade > 0 (RN07) | V2 |
+| EV-B7 | 3. Ingressos | Tipos com nome, preço ≥ 0 (RN08), quantidade > 0 (RN07) e fila de espera por tipo (RN22); resumo considera a taxa repassada ao comprador por padrão (RN17) | V2 / fila: V6 |
 | EV-B8–B9 | 4. Revisão e publicação / Confirmar | Publicar exige ≥ 1 tipo de ingresso (RN04) | V2 |
 | EV-C1 | Detalhe · Visão geral | KPIs, alertas, tipos de ingresso, gráfico de vendas, pedidos recentes | V3 |
-| EV-C2 | Detalhe · Ingressos | Vendidos / total por tipo; disponível = total − vendido | V2 |
+| EV-C2 | Detalhe · Ingressos | Vendidos / total por tipo; disponível = total − vendido; estado da fila de espera de cada tipo (RN22) | V2 / fila: V6 |
 | EV-C3 | Detalhe · Pedidos | Pedidos do evento por status | V2 |
 | EV-C4 | Detalhe · Participantes | Titulares dos ingressos; dados pessoais (LGPD) | V3 |
 | EV-C5 | Detalhe · Check-in (pré-evento) | Abertura do check-in (2 h antes do início); entradas por tipo; regras de validação: busca manual, modo offline, alerta de Estudante e **sem reentrada (sempre ativo)**; a equipe usa o mesmo app (ADR-0002) | V4 |
@@ -151,7 +151,7 @@ Aba **Mais** do Tab bar: conta, produtora e suporte. O perfil e o "Sair da conta
 | Código | Tela | Regras / dados | Backend |
 |---|---|---|---|
 | CF-A1 | Menu de seções | Geral, Notificações, Pagamentos, Equipe, Integrações, Segurança (aberto a partir de MA-A1) | V2 |
-| CF-A2 | Geral | Idioma, fuso, moeda, formato de data; padrões de novos eventos: limite por pedido (RN19), política de reembolso (RN24), repassar taxa ao comprador (RN17), fila de espera (RN22) | V3 |
+| CF-A2 | Geral | Idioma, fuso, moeda, formato de data; padrões de novos eventos: limite por pedido (RN19), política de reembolso (RN24), repassar taxa ao comprador (RN17), fila de espera em tipos novos (RN22) | V3 |
 | CF-A3 | Notificações | Canais (e-mail, push, SMS) e eventos (novo pedido, pendente > 24 h, reembolso, lote 90%, esgotado, lembrete) | V6 |
 | CF-A4 | Pagamentos e repasses | Saldo disponível / a liberar, dados bancários, frequência de repasse, histórico, taxas | V5 |
 | CF-A5 | Equipe | Papéis: Proprietário, Administrador, Financeiro, Check-in; convites | V4 |
@@ -177,6 +177,8 @@ Aba **Mais** do Tab bar: conta, produtora e suporte. O perfil e o "Sair da conta
 | PT-B7 | Boleto gerado | `/pedidos/<n>/pagamento` | Vencimento antes do evento (RN21) | V5 |
 | PT-B8 | Reserva expirou · tipo esgotou | `/checkout/<id>` | RN09 + RN20; alternativas e fila de espera (RN22) | V5 / V7 |
 | PT-B9 | Pix expirado | `/pedidos/<n>/pagamento` | Cancelamento automático (RN21); pagamento tardio devolvido | V5 / V6 |
+| PT-B10 | Na fila de espera | `/e/<slug>/fila` | Posição na fila, quantidade pedida, como funciona; sair da fila (RN22) | V6 |
+| PT-B11 | Sua vez na fila | `/checkout/<id>` | Checkout com reserva exclusiva de 30 min; boleto indisponível (RN22) | V6 |
 | PT-C1 | Meus ingressos | `/meus-ingressos` | Próximos / passados, agrupados por evento | V4 |
 | PT-C2 | Ingresso | `/meus-ingressos/<id>` | QR do ticket, titular, tipo | V4 |
 | PT-C3 | Meus pedidos | `/meus-pedidos` | Consulta de pedidos por status (CA15) | V4 |
@@ -239,7 +241,7 @@ Estas regras nasceram do design. **Nenhuma entra na V1.** Cada uma será refinad
 | **RN19 — Limite por pedido** | Cada pedido aceita no máximo N ingressos (padrão 6, configurável). | PT-B1, CF-A2 | V2 |
 | **RN20 — Reserva de estoque** | Ao iniciar o pagamento, a quantidade escolhida fica reservada por 10 minutos. Reserva expirada devolve o estoque. É a forma de aplicar a RN09 com vários compradores simultâneos. | PT-B2, PT-B5, PT-B6, PT-B8 | V5 (concorrência: V7) |
 | **RN21 — Expiração de pedido pendente** | Pedido `PENDING` é cancelado automaticamente: Pix após 30 minutos; boleto no vencimento. O boleto precisa vencer com tempo de compensação antes do evento. Pagamento recebido depois do cancelamento é devolvido automaticamente. | PT-B3, PT-B7, PT-B9 | V5 / V6 |
-| **RN22 — Fila de espera** | Quando um tipo esgota, o participante pode entrar na fila; se um ingresso for liberado, a fila é avisada. Configurável por evento. | PT-B8, CF-A2 | Futuro (a decidir) |
+| **RN22 — Fila de espera** | Configurada **por tipo de ingresso** (padrão para tipos novos em CF-A2). Quando um tipo com fila esgota, o participante entra informando a quantidade (até o limite por pedido, RN19); nada é cobrado. Quando a quantidade é liberada (reembolso, pedido expirado), a fila é atendida **em ordem**: a pessoa é avisada por e-mail e tem **30 minutos de reserva exclusiva** (RN20); se não comprar, a vez passa para a próxima e ela sai da fila. Na reserva da fila, só Pix e cartão (boleto não cabe em 30 min). Se as vendas terminarem, a fila é encerrada. | EV-B7, EV-C2, CF-A2, PT-B8, PT-B10, PT-B11 | V6 (concorrência da reserva: V7) |
 | **RN23 — Transferência de ingresso** | O titular pode transferir um ticket para outra pessoa (nome + e-mail) até 24 h antes do evento. O QR anterior é invalidado; a transferência não pode ser desfeita por quem transferiu. | PT-C2, PT-C4, PT-C5 | V4 |
 | **RN24 — Política de reembolso** | O participante pode pedir reembolso até 7 dias antes do evento (padrão configurável). | CF-A2, PT-B2 | V5 |
 | **RN25 — Reembolso no cancelamento** | Cancelar um evento reembolsa todos os pedidos confirmados pelo mesmo meio de pagamento e avisa os participantes. | EV-D8 | V5 / V6 |
@@ -267,9 +269,7 @@ Estas regras nasceram do design. **Nenhuma entra na V1.** Cada uma será refinad
 
 ## 6. Decisões em aberto
 
-| Tema | Situação | Impacto |
-|---|---|---|
-| **Fila de espera no formulário do evento** | RN22 é configurável por evento, mas o formulário EV-B ainda não tem esse campo (só o padrão em CF-A2). | EV-B3 |
+Nenhuma decisão de produto em aberto no momento. Novas dúvidas que surgirem no design ou na implementação entram aqui antes de virar Issue.
 
 ---
 
