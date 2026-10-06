@@ -30,7 +30,7 @@ Decisão registrada em [`docs/adr/0001-superficies-do-produto.md`](adr/0001-supe
 
 | Superfície | Quem usa | Formato | Páginas no Figma |
 |---|---|---|---|
-| **App do organizador** | `ORGANIZER` e sua equipe | Aplicativo **mobile-only** (430 px de referência), tema escuro | 📱 Painel · 📱 Eventos · 📱 Perfil · 📱 Configurações |
+| **App do organizador** | `ORGANIZER` e sua equipe | Aplicativo **mobile-only** (430 px de referência), tema escuro | 📱 Painel · 📱 Eventos · 📱 Pedidos · 📱 Mais · 📱 Perfil · 📱 Configurações |
 | **Site do participante** | `PARTICIPANT` e visitantes | **Web responsivo**: Desktop 1728 · Tablet 1024 · Mobile 430 | 🌐 Participante (web) |
 | Administração da plataforma | `SUPER_ADMIN` | — | Fora do escopo de design por enquanto |
 
@@ -60,6 +60,8 @@ As telas usam rótulos em português. O código usa os enums do domínio. A corr
 | `OrderStatus.CONFIRMED` | Confirmado | Sucesso |
 | `OrderStatus.CANCELLED` | Cancelado | Neutro |
 | `TicketStatus.SOLD` | Emitido | Sucesso |
+
+**A partir da V5** (ADR-0002), o ticket passa a ter o ciclo `ISSUED` (Emitido · Sucesso) → `USED` (Utilizado · Neutro) ou `CANCELLED` (Cancelado · Neutro). A V1 mantém `AVAILABLE`/`SOLD`.
 
 Estados que aparecem nas telas mas **ainda não existem no domínio** estão na seção 6 (decisões em aberto) ou nas regras futuras (seção 5).
 
@@ -93,13 +95,13 @@ Legenda de versão: a coluna **Backend** indica a primeira versão em que a tela
 | EV-B1–B2 | Novo evento (vazio / validação) | Nome obrigatório (RN01); validação no topo + campo em erro | V2 (validação com exceptions: V1.5) |
 | EV-B3 | 1. Detalhes | Nome, categoria, formato, descrição, classificação etária, idioma, capa | V2 / capa: V3 |
 | EV-B4–B6 | 2. Data e local (Online / Presencial / Híbrido) | Início e término; endereço com mapa; link de transmissão | V2 |
-| EV-B7 | 3. Ingressos | Tipos com nome, preço ≥ 0 (RN08), quantidade > 0 (RN07) | V2 |
+| EV-B7 | 3. Ingressos | Tipos com nome, preço ≥ 0 (RN08), quantidade > 0 (RN07) e fila de espera por tipo (RN22); resumo considera a taxa repassada ao comprador por padrão (RN17) | V2 / fila: V6 |
 | EV-B8–B9 | 4. Revisão e publicação / Confirmar | Publicar exige ≥ 1 tipo de ingresso (RN04) | V2 |
 | EV-C1 | Detalhe · Visão geral | KPIs, alertas, tipos de ingresso, gráfico de vendas, pedidos recentes | V3 |
-| EV-C2 | Detalhe · Ingressos | Vendidos / total por tipo; disponível = total − vendido | V2 |
+| EV-C2 | Detalhe · Ingressos | Vendidos / total por tipo; disponível = total − vendido; estado da fila de espera de cada tipo (RN22) | V2 / fila: V6 |
 | EV-C3 | Detalhe · Pedidos | Pedidos do evento por status | V2 |
 | EV-C4 | Detalhe · Participantes | Titulares dos ingressos; dados pessoais (LGPD) | V3 |
-| EV-C5 | Detalhe · Check-in (pré-evento) | Equipe de check-in e abertura do check-in | V4 (ver seção 6) |
+| EV-C5 | Detalhe · Check-in (pré-evento) | Abertura do check-in (2 h antes do início); entradas por tipo; regras de validação: busca manual, modo offline, alerta de Estudante e **sem reentrada (sempre ativo)**; a equipe usa o mesmo app (ADR-0002) | V4 |
 | EV-D1 | Menu ⋯ do evento (Publicado) | Duplicar, copiar link, QR code, exportar · pausar, encerrar vendas · cancelar | V2 |
 | EV-D2 | Copiar link | Toast; link público `arclou.com/e/<slug>` | V2 |
 | EV-D3 | Duplicar evento | Cópia nasce como `DRAFT` (RN03) | V2 |
@@ -108,6 +110,32 @@ Legenda de versão: a coluna **Backend** indica a primeira versão em que a tela
 | EV-D6 | Pausar vendas | Reversível; bloqueia novos pedidos (RN18) | V2 |
 | EV-D7 | Encerrar vendas | Irreversível para vendas; evento segue `PUBLISHED` até acontecer (RN18) | V2 |
 | EV-D8 | Cancelar evento | `CANCELLED` (RN06/RN12); reembolso de todos os pedidos confirmados (RN25); digitar CANCELAR | V2 / reembolso: V5 |
+
+#### 📱 Pedidos — `PD`
+
+Aba **Pedidos** do Tab bar: todos os pedidos da produtora, de todos os eventos. No app, o valor de um pedido é sempre o **subtotal dos ingressos** (o que o organizador recebe); a taxa de serviço aparece separada, como paga pelo comprador.
+
+| Código | Tela | Regras / dados | Backend |
+|---|---|---|---|
+| PD-A1 | Lista | Abas por status (contagem só em Pendentes); filtro por evento; alerta de pendentes há mais de 24 h; agrupado por dia | V2 / filtros: V3 |
+| PD-A2 | Pedido confirmado | Comprador, tickets emitidos com titular (RN11, RN26), pagamento (subtotal, taxa, total pago, valor a receber), histórico, liberação para repasse 2 dias após o evento | V2 / pagamento: V5 |
+| PD-A3 | Pedido pendente | Ingressos reservados, ainda não emitidos (RN11); vencimento do boleto (RN21); reenviar boleto; cancelar pedido | V5 |
+| PD-A4 | Reembolsar (total) | Motivo; impacto: devolução ao comprador, desconto no saldo, ingressos invalidados e devolvidos ao estoque (RN28) | V5 |
+| PD-A4 | Reembolso parcial | Seleção dos ingressos a devolver; pedido continua `CONFIRMED` com os restantes (RN29) | V5 |
+| PD-A5 | Pedido reembolsado | Pedido `CANCELLED`; tickets invalidados; prazo da devolução | V5 |
+
+#### 📱 Mais — `MA`
+
+Aba **Mais** do Tab bar: conta, produtora e suporte. O perfil e o "Sair da conta" ficam aqui; Configurações (CF-A1) é aberto a partir deste menu.
+
+| Código | Tela | Regras / dados | Backend |
+|---|---|---|---|
+| MA-A1 | Menu | Perfil; Produtora (página pública, equipe, pagamentos); Conta (configurações, segurança); Suporte (ajuda, falar com o suporte, termos e privacidade); sair | V2 |
+| MA-A2 | Página pública | Logo, capa, nome, endereço da página (`/o/<slug>`; mudar quebra links já compartilhados), cidade, sobre (até 300 caracteres), redes e contato, o que exibir (eventos realizados, contagem de ingressos vendidos) | V3 |
+| MA-A3 | Central de ajuda | Busca, categorias, artigos mais buscados, atalho para o suporte | V3 (conteúdo estático) |
+| MA-A4 | Artigos de ajuda (mais buscados) | 5 artigos, um por item da lista de MA-A3. O conteúdo cita as regras vigentes — mudou a regra, muda o artigo: **Repasses** (liberação 2 dias após o evento, repasse semanal, RN17) · **Reembolsar pedido** (RN28, RN29; exemplo do parcial do #1042) · **Por que não posso publicar** (RN01, RN04, RN07, RN08; exemplo do Workshop) · **Pausar ou encerrar vendas** (RN18, comparado com cancelar/RN25) · **Convidar para a equipe** (RN33; papéis com o mesmo texto de CF-A5) | V3 |
+| MA-A5 | Falar com o suporte | Assunto, evento e pedido relacionados, mensagem (até 2.000 caracteres), anexo (JPG, PNG, PDF até 10 MB), histórico de chamados | V3 / anexo: V3 |
+| MA-A6 | Mensagem enviada | Protocolo do chamado; resposta por e-mail em até 1 dia útil | V6 (e-mail) |
 
 #### 📱 Perfil — `PF`
 
@@ -122,8 +150,8 @@ Legenda de versão: a coluna **Backend** indica a primeira versão em que a tela
 
 | Código | Tela | Regras / dados | Backend |
 |---|---|---|---|
-| CF-A1 | Menu de seções | Geral, Notificações, Pagamentos, Equipe, Integrações, Segurança | V2 |
-| CF-A2 | Geral | Idioma, fuso, moeda, formato de data; padrões de novos eventos: limite por pedido (RN19), política de reembolso (RN24), repassar taxa ao comprador (RN17), fila de espera (RN22) | V3 |
+| CF-A1 | Menu de seções | Geral, Notificações, Pagamentos, Equipe, Integrações, Segurança (aberto a partir de MA-A1) | V2 |
+| CF-A2 | Geral | Idioma, fuso, moeda, formato de data; padrões de novos eventos: limite por pedido (RN19), política de reembolso (RN24), repassar taxa ao comprador (RN17), fila de espera em tipos novos (RN22) | V3 |
 | CF-A3 | Notificações | Canais (e-mail, push, SMS) e eventos (novo pedido, pendente > 24 h, reembolso, lote 90%, esgotado, lembrete) | V6 |
 | CF-A4 | Pagamentos e repasses | Saldo disponível / a liberar, dados bancários, frequência de repasse, histórico, taxas | V5 |
 | CF-A5 | Equipe | Papéis: Proprietário, Administrador, Financeiro, Check-in; convites | V4 |
@@ -139,6 +167,7 @@ Legenda de versão: a coluna **Backend** indica a primeira versão em que a tela
 |---|---|---|---|---|
 | PT-A1 | Explorar | `/` | Só eventos `PUBLISHED` (RN05); gratuito = preço 0 (RN08); esgotado | V2 |
 | PT-A2 | Página do evento | `/e/<slug>` | Tipos com preço e disponibilidade; prazo de vendas; taxa informada antes do pagamento | V2 |
+| PT-A3 | Página da produtora | `/o/<slug>` | Dados editados em MA-A2; eventos próximos (`PUBLISHED`) e realizados (`FINISHED`); cancelados e rascunhos nunca aparecem | V3 |
 | PT-B1 | Escolher ingressos | `/e/<slug>/ingressos` | Não passa da disponibilidade (RN09) nem do limite por pedido (RN19); total calculado (RN10) | V2 |
 | PT-B2 | Pagamento | `/checkout/<id>` | Reserva de 10 min (RN20); titular por ingresso (RN26); Pix / cartão / boleto | V5 |
 | PT-B3 | Aguardando Pix | `/pedidos/<n>/pagamento` | Pedido `PENDING`; ingressos só após confirmação (RN11) | V5 |
@@ -148,11 +177,55 @@ Legenda de versão: a coluna **Backend** indica a primeira versão em que a tela
 | PT-B7 | Boleto gerado | `/pedidos/<n>/pagamento` | Vencimento antes do evento (RN21) | V5 |
 | PT-B8 | Reserva expirou · tipo esgotou | `/checkout/<id>` | RN09 + RN20; alternativas e fila de espera (RN22) | V5 / V7 |
 | PT-B9 | Pix expirado | `/pedidos/<n>/pagamento` | Cancelamento automático (RN21); pagamento tardio devolvido | V5 / V6 |
+| PT-B10 | Na fila de espera | `/e/<slug>/fila` | Posição na fila, quantidade pedida, como funciona; sair da fila (RN22) | V6 |
+| PT-B11 | Sua vez na fila | `/checkout/<id>` | Checkout com reserva exclusiva de 30 min; boleto indisponível (RN22) | V6 |
 | PT-C1 | Meus ingressos | `/meus-ingressos` | Próximos / passados, agrupados por evento | V4 |
 | PT-C2 | Ingresso | `/meus-ingressos/<id>` | QR do ticket, titular, tipo | V4 |
 | PT-C3 | Meus pedidos | `/meus-pedidos` | Consulta de pedidos por status (CA15) | V4 |
 | PT-C4 | Transferir ingresso | modal em `/meus-ingressos/<id>` | RN23 | V4 |
 | PT-C5 | Ingresso transferido | `/meus-ingressos/<id>` | Ticket deixa a conta de quem transferiu | V4 |
+
+### 4.3 Acesso (página 🔐 Acesso) — `AC`
+
+Duas superfícies, dois cadastros: o **site cria contas `PARTICIPANT`**; o **app cria contas `ORGANIZER`** junto com a produtora. Equipes entram por convite. Tudo isso pertence à V4 (Security).
+
+#### Site do participante (web: Desktop, Tablet, Mobile)
+
+| Código | Tela | Rota | Regras / dados | Backend |
+|---|---|---|---|---|
+| AC-A1 | Entrar | `/entrar?continuar=<rota>` | Volta para onde a pessoa estava (ex.: escolher ingressos); link para o app de organizadores | V4 |
+| AC-A2 | Criar conta | `/criar-conta` | Nome, e-mail, senha (mínimo 8, medidor de força); aceite de termos obrigatório; novidades por e-mail é opcional (LGPD) | V4 |
+| AC-A3 | Esqueci a senha | `/esqueci-a-senha` | Envia link de redefinição | V4 / e-mail: V6 |
+| AC-A4 | Link enviado | `/esqueci-a-senha/enviado` | Mensagem não revela se o e-mail existe (RN31); reenvio com espera | V4 |
+| AC-A5 | Nova senha | `/redefinir-senha?token=…` | Link válido por 30 min (RN31); opção de desconectar outros aparelhos; também usada a partir do app (AC-B5) | V4 |
+| AC-A6 | Erro ao entrar | `/entrar` | Mensagem genérica; bloqueio após 5 tentativas (RN30) | V4 |
+| AC-A7 | Confirmar e-mail | `/criar-conta/confirmar` | Código de 6 dígitos enviado no cadastro (RN32) | V4 / V6 |
+
+#### App do organizador (mobile)
+
+| Código | Tela | Regras / dados | Backend |
+|---|---|---|---|
+| AC-B1 | Entrar | E-mail e senha ou passkey (Face ID/digital); criar conta de organizador | V4 |
+| AC-B2 | Código 2FA | Pedido após a senha quando 2FA está ativa; "confiar neste aparelho" por 30 dias; alternativa: código de recuperação (CF-B3) | V4 |
+| AC-B3 | Criar conta de organizador | Dados pessoais + produtora (nome, cidade); cria `ORGANIZER` como Proprietário da produtora (RN34) | V4 |
+| AC-B4 | Aceitar convite | E-mail do convite é fixo; papel e permissões visíveis antes de aceitar; convite expira em 7 dias (RN33) | V4 |
+| AC-B5 | Esqueci a senha | Envia o link; a nova senha é criada na web (AC-A5); 2FA continua exigida depois | V4 |
+
+### 4.4 Check-in (página 📱 Check-in) — `CK`
+
+No app do organizador. Quem tem o papel Check-in entra direto nestas telas (sem Tab bar); organizadores abrem pelo detalhe do evento. Decisões em [`ADR-0002`](adr/0002-ciclo-de-vida-do-ticket-e-check-in.md).
+
+| Código | Tela | Regras / dados | Backend |
+|---|---|---|---|
+| CK-A1 | Escolher evento e portão | Só eventos com check-in aberto; portão (A · Pista e Estudante, B · Área VIP) com contagem; lista para uso offline | V5 |
+| CK-A2 | Scanner | Leitura do QR; contador de presentes; estado da conexão | V5 |
+| CK-A3 | Entrada liberada | `ISSUED` → `USED` (RN35); registra horário, portão e quem validou | V5 |
+| CK-A3 | Conferir carteirinha | Ingresso de meia-entrada: só vira `USED` depois de "Liberar entrada" (RN38) | V5 |
+| CK-A4 | Já utilizado | Ticket `USED`: entrada recusada, mostra quando/onde/quem (RN36) | V5 |
+| CK-A5 | Ingresso inválido | Outro evento, `CANCELLED` ou QR desconhecido: entrada recusada | V5 |
+| CK-A6 | Busca manual | Por nome, e-mail ou nº do ingresso; exige conferir documento com foto; registrada como manual (RN39) | V5 |
+| CK-A7 | Painel ao vivo | Aba Check-in do evento no dia: presentes por tipo e por portão, equipe online, ocorrências (inclui conflito offline) | V5 / V8 (métricas) |
+| CK-A8 | Sem internet | Valida com a lista baixada; leituras aguardando envio (RN37) | V7 |
 
 ---
 
@@ -168,12 +241,24 @@ Estas regras nasceram do design. **Nenhuma entra na V1.** Cada uma será refinad
 | **RN19 — Limite por pedido** | Cada pedido aceita no máximo N ingressos (padrão 6, configurável). | PT-B1, CF-A2 | V2 |
 | **RN20 — Reserva de estoque** | Ao iniciar o pagamento, a quantidade escolhida fica reservada por 10 minutos. Reserva expirada devolve o estoque. É a forma de aplicar a RN09 com vários compradores simultâneos. | PT-B2, PT-B5, PT-B6, PT-B8 | V5 (concorrência: V7) |
 | **RN21 — Expiração de pedido pendente** | Pedido `PENDING` é cancelado automaticamente: Pix após 30 minutos; boleto no vencimento. O boleto precisa vencer com tempo de compensação antes do evento. Pagamento recebido depois do cancelamento é devolvido automaticamente. | PT-B3, PT-B7, PT-B9 | V5 / V6 |
-| **RN22 — Fila de espera** | Quando um tipo esgota, o participante pode entrar na fila; se um ingresso for liberado, a fila é avisada. Configurável por evento. | PT-B8, CF-A2 | Futuro (a decidir) |
+| **RN22 — Fila de espera** | Configurada **por tipo de ingresso** (padrão para tipos novos em CF-A2). Quando um tipo com fila esgota, o participante entra informando a quantidade (até o limite por pedido, RN19); nada é cobrado. Quando a quantidade é liberada (reembolso, pedido expirado), a fila é atendida **em ordem**: a pessoa é avisada por e-mail e tem **30 minutos de reserva exclusiva** (RN20); se não comprar, a vez passa para a próxima e ela sai da fila. Na reserva da fila, só Pix e cartão (boleto não cabe em 30 min). Se as vendas terminarem, a fila é encerrada. | EV-B7, EV-C2, CF-A2, PT-B8, PT-B10, PT-B11 | V6 (concorrência da reserva: V7) |
 | **RN23 — Transferência de ingresso** | O titular pode transferir um ticket para outra pessoa (nome + e-mail) até 24 h antes do evento. O QR anterior é invalidado; a transferência não pode ser desfeita por quem transferiu. | PT-C2, PT-C4, PT-C5 | V4 |
 | **RN24 — Política de reembolso** | O participante pode pedir reembolso até 7 dias antes do evento (padrão configurável). | CF-A2, PT-B2 | V5 |
 | **RN25 — Reembolso no cancelamento** | Cancelar um evento reembolsa todos os pedidos confirmados pelo mesmo meio de pagamento e avisa os participantes. | EV-D8 | V5 / V6 |
 | **RN26 — Titular por ingresso** | Cada ticket tem um titular (nome). Por padrão é o comprador; pode ser outra pessoa. | PT-B2, PT-C2, EV-C4 | V4 |
 | **RN27 — Exclusão de conta** | Conta de organizador só pode ser excluída sem eventos à venda, sem saldo a liberar e sem ser proprietária de equipe. Dados pessoais são apagados em até 30 dias (LGPD); registros fiscais são mantidos pelo prazo legal. | PF-A4 | V4 / V5 |
+| **RN28 — Reembolso feito pelo organizador** | O comprador recebe o valor integral que pagou (ingressos + taxa de serviço) pelo mesmo meio de pagamento, em até 7 dias úteis. O organizador tem descontado apenas o subtotal dos ingressos do saldo a liberar. Reembolso total cancela o pedido (`CANCELLED`) e invalida todos os tickets, que voltam ao estoque. | PD-A4, PD-A5 | V5 |
+| **RN29 — Reembolso parcial** | O organizador escolhe quais tickets devolver. Os tickets escolhidos são invalidados e voltam ao estoque; o comprador recebe o valor deles mais a taxa correspondente. O pedido continua `CONFIRMED` com os tickets restantes; o total original é mantido e o valor reembolsado é registrado à parte. Se todos os tickets forem reembolsados, o pedido passa a `CANCELLED` (RN28). | PD-A4 (parcial) | V5 |
+| **RN30 — Bloqueio por tentativas** | Após 5 tentativas de login erradas, o acesso à conta fica bloqueado por 15 minutos. A mensagem de erro nunca diz se o e-mail existe. | AC-A6 | V4 |
+| **RN31 — Redefinição de senha** | O link de redefinição vale 30 minutos e só pode ser usado uma vez. A resposta ao pedido é sempre a mesma, exista ou não a conta. | AC-A3, AC-A4, AC-A5, AC-B5 | V4 |
+| **RN32 — Confirmação de e-mail** | Toda conta nova confirma o e-mail com um código de 6 dígitos antes de comprar ou publicar. | AC-A2, AC-A7, AC-B3 | V4 |
+| **RN33 — Convite de equipe** | O convite é enviado para um e-mail específico, define o papel (Proprietário, Administrador, Financeiro, Check-in) e expira em 7 dias. Só esse e-mail pode aceitá-lo. | CF-A5, AC-B4 | V4 |
+| **RN34 — Conta por superfície** | Cadastro no site cria `PARTICIPANT`; cadastro no app cria `ORGANIZER` e a produtora, com a pessoa como Proprietária. | AC-A2, AC-B3 | V4 |
+| **RN35 — Check-in** | Só tickets `ISSUED` do próprio evento entram, a partir da abertura do check-in (padrão: 2 h antes do início). A leitura válida muda o ticket para `USED` e registra horário, portão e pessoa da equipe. O portão organiza filas e relatórios; não muda a validade do ticket. | CK-A2, CK-A3, CK-A7 | V5 |
+| **RN36 — Sem reentrada** | `USED` é final. Nova leitura do mesmo ticket é recusada e registrada como ocorrência. | CK-A4, EV-C5 | V5 |
+| **RN37 — Check-in offline** | O app baixa a lista de tickets do evento e valida localmente sem internet, sincronizando depois. Se o mesmo ticket for lido em dois aparelhos offline, vale a leitura mais antiga; a outra vira ocorrência recusada. | CK-A1, CK-A7, CK-A8 | V7 |
+| **RN38 — Meia-entrada** | Tickets de tipo meia-entrada (ex.: Estudante) exigem que a equipe confira o documento e toque em "Liberar entrada"; só então viram `USED`. Recusar não altera o ticket. | CK-A3 (carteirinha), EV-C5 | V5 |
+| **RN39 — Validação manual** | Sem QR, a equipe busca o ticket por nome, e-mail ou número, confere documento com foto e valida; a leitura fica marcada como manual. | CK-A6 | V5 |
 
 ### Ressalvas importantes para a V1
 
@@ -184,12 +269,7 @@ Estas regras nasceram do design. **Nenhuma entra na V1.** Cada uma será refinad
 
 ## 6. Decisões em aberto
 
-| Tema | Situação | Impacto |
-|---|---|---|
-| **Check-in / `TicketStatus.USED`** | O domínio só tem `AVAILABLE` e `SOLD`. Validar ingresso na entrada exige um status de "utilizado". Telas de check-in no dia do evento só serão desenhadas depois desta decisão. | Domínio, EV-C5, futuro app de check-in |
-| **Fila de espera no formulário do evento** | RN22 é configurável por evento, mas o formulário EV-B ainda não tem esse campo (só o padrão em CF-A2). | EV-B3 |
-| **Status de ticket transferido** | Hoje modelado como troca de titular (RN23), sem status novo. Confirmar ao implementar a V4. | Domínio |
-| **Página pública do organizador** | `arclou.com/o/<slug>` aparece no Perfil e no menu ⋯ da lista, mas ainda não foi desenhada. | PT (nova tela) |
+Nenhuma decisão de produto em aberto no momento. Novas dúvidas que surgirem no design ou na implementação entram aqui antes de virar Issue.
 
 ---
 
@@ -200,3 +280,5 @@ As telas usam um conjunto fixo de dados para que os números batam entre si. Use
 - **Tech Summit 2026** — Publicado · seg, 12 out 2026, 09:00–18:00 · Expo Center Norte, São Paulo/SP · 500 ingressos, 412 vendidos · Pista R$ 60,00 (260/300) · VIP R$ 160,00 (92/100) · Estudante R$ 44,00 (60/100).
 - **Noite do Jazz** — Publicado, esgotado (180/180). **Meetup Backend BR** — Publicado, gratuito. **Workshop Java Moderno** — Rascunho. **Show Beneficente** — Cancelado. **DevConf 2026** — Encerrado.
 - **Pedido #1042** — Ana Souza, 2× VIP, R$ 320,00 (subtotal) / R$ 345,60 (com taxa), Pix, Confirmado; tickets #10421 (Ana Souza) e #10422 (Bruno Souza).
+- **Outros pedidos do Tech Summit** — #1041 Léo Martins, 1× Pista, R$ 60,00, boleto, Pendente · #1040 Carla Dias, 4× Pista, R$ 240,00 · #1039 Rafael Lima, 1× Estudante, R$ 44,00 · #1038 Bruno Alves, 1× VIP + 1× Pista, R$ 220,00 · #1037 Marina Costa, 2× Pista, R$ 120,00, Cancelado (cartão recusado).
+- **Pendentes da produtora:** 14 (6 do Tech Summit + 8 do Noite do Jazz), número usado no alerta do Painel e na aba Pedidos.

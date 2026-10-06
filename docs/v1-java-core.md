@@ -327,7 +327,7 @@ As telas do Figma mostram esses estados em português. A correspondência é fix
 | `PENDING` / `CONFIRMED` / `CANCELLED` (pedido) | Pendente / Confirmado / Cancelado |
 | `SOLD` (ticket) | Emitido |
 
-Um status de ticket "utilizado" (check-in) **não existe** na V1 e ainda é uma decisão em aberto — ver `docs/produto-e-design.md`, seção 6.
+A V1 mantém `AVAILABLE`/`SOLD`. A partir da V5, o ticket passa a ter o ciclo `ISSUED` → `USED` / `CANCELLED`, sem reentrada — ver `docs/adr/0002-ciclo-de-vida-do-ticket-e-check-in.md`.
 
 ---
 
@@ -404,7 +404,7 @@ O Figma desenha o produto final. Dois pontos são intencionalmente mais simples 
 
 ### Regras previstas para versões futuras
 
-As regras RN16 a RN27 nasceram do design (exclusão de rascunho, taxa de serviço, vendas pausadas, limite por pedido, reserva de estoque, expiração de pedido pendente, fila de espera, transferência, reembolsos, titular por ingresso e exclusão de conta).
+As regras RN16 a RN39 nasceram do design (exclusão de rascunho, taxa de serviço, vendas pausadas, limite por pedido, reserva de estoque, expiração de pedido pendente, fila de espera, transferência, reembolsos, titular por ingresso, exclusão de conta, reembolsos total e parcial pelo organizador regras de acesso e check-in).
 
 **Nenhuma delas faz parte da V1.** A descrição, as telas relacionadas e a versão de cada uma estão em `docs/produto-e-design.md`, seção 5.
 
