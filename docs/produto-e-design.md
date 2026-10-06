@@ -43,6 +43,7 @@ Navegação do site do participante (Site Header): busca, **Meus ingressos** e c
 - Cores, espaçamento e raios são **variáveis** no Figma (`Arclou / Color`, `Arclou / Scale`). Nenhuma cor é definida solta nas telas.
 - **Base escura:** fundo `bg/page` **#1D1D1B** (quase-preto quente), cards `bg/surface` #262624, texto #F0F0F0 / #B1AFAF.
 - **Cor de marca:** `primary/600` **#68F9D8** (menta), com `primary/on` #111111 para texto sobre ela.
+- **Logo:** ingresso em contorno com picote + "Arclou" em Poppins SemiBold (componente `Arclou Logo`, página Logo do Figma). As cores são ligadas às variáveis, então o mesmo logo funciona no escuro e na folha clara. Poppins é usada só no logo; a interface usa Inter.
 - **Folha clara** (modo de variável `Folha clara`): nas telas principais de cada aba (Painel, Eventos, Pedidos, Mais), o topo fica escuro (saudação, abas, números em destaque) e o conteúdo vem numa **folha branca** com cantos de 28 px. Dentro da folha:
   - os tokens se invertem (fundo branco, texto #111111, bordas claras, status em versões para fundo branco);
   - a cor primária vira **#087A63** (menta escura), porque a menta viva sobre branco não passa em contraste — a menta viva fica só nas áreas escuras;
@@ -212,6 +213,7 @@ Duas superfícies, dois cadastros: o **site cria contas `PARTICIPANT`**; o **app
 
 | Código | Tela | Regras / dados | Backend |
 |---|---|---|---|
+| AC-B0 | Abertura | Logo centralizado sobre trama de ingressos; aparece ao abrir o app, antes de entrar | V4 |
 | AC-B1 | Entrar | E-mail e senha ou passkey (Face ID/digital); criar conta de organizador | V4 |
 | AC-B2 | Código 2FA | Pedido após a senha quando 2FA está ativa; "confiar neste aparelho" por 30 dias; alternativa: código de recuperação (CF-B3) | V4 |
 | AC-B3 | Criar conta de organizador | Dados pessoais + produtora (nome, cidade); cria `ORGANIZER` como Proprietário da produtora (RN34) | V4 |
