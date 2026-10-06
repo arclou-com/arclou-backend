@@ -181,6 +181,32 @@ Aba **Mais** do Tab bar: conta, produtora e suporte. O perfil e o "Sair da conta
 | PT-C4 | Transferir ingresso | modal em `/meus-ingressos/<id>` | RN23 | V4 |
 | PT-C5 | Ingresso transferido | `/meus-ingressos/<id>` | Ticket deixa a conta de quem transferiu | V4 |
 
+### 4.3 Acesso (página 🔐 Acesso) — `AC`
+
+Duas superfícies, dois cadastros: o **site cria contas `PARTICIPANT`**; o **app cria contas `ORGANIZER`** junto com a produtora. Equipes entram por convite. Tudo isso pertence à V4 (Security).
+
+#### Site do participante (web: Desktop, Tablet, Mobile)
+
+| Código | Tela | Rota | Regras / dados | Backend |
+|---|---|---|---|---|
+| AC-A1 | Entrar | `/entrar?continuar=<rota>` | Volta para onde a pessoa estava (ex.: escolher ingressos); link para o app de organizadores | V4 |
+| AC-A2 | Criar conta | `/criar-conta` | Nome, e-mail, senha (mínimo 8, medidor de força); aceite de termos obrigatório; novidades por e-mail é opcional (LGPD) | V4 |
+| AC-A3 | Esqueci a senha | `/esqueci-a-senha` | Envia link de redefinição | V4 / e-mail: V6 |
+| AC-A4 | Link enviado | `/esqueci-a-senha/enviado` | Mensagem não revela se o e-mail existe (RN31); reenvio com espera | V4 |
+| AC-A5 | Nova senha | `/redefinir-senha?token=…` | Link válido por 30 min (RN31); opção de desconectar outros aparelhos; também usada a partir do app (AC-B5) | V4 |
+| AC-A6 | Erro ao entrar | `/entrar` | Mensagem genérica; bloqueio após 5 tentativas (RN30) | V4 |
+| AC-A7 | Confirmar e-mail | `/criar-conta/confirmar` | Código de 6 dígitos enviado no cadastro (RN32) | V4 / V6 |
+
+#### App do organizador (mobile)
+
+| Código | Tela | Regras / dados | Backend |
+|---|---|---|---|
+| AC-B1 | Entrar | E-mail e senha ou passkey (Face ID/digital); criar conta de organizador | V4 |
+| AC-B2 | Código 2FA | Pedido após a senha quando 2FA está ativa; "confiar neste aparelho" por 30 dias; alternativa: código de recuperação (CF-B3) | V4 |
+| AC-B3 | Criar conta de organizador | Dados pessoais + produtora (nome, cidade); cria `ORGANIZER` como Proprietário da produtora (RN34) | V4 |
+| AC-B4 | Aceitar convite | E-mail do convite é fixo; papel e permissões visíveis antes de aceitar; convite expira em 7 dias (RN33) | V4 |
+| AC-B5 | Esqueci a senha | Envia o link; a nova senha é criada na web (AC-A5); 2FA continua exigida depois | V4 |
+
 ---
 
 ## 5. Regras previstas para versões futuras
@@ -203,6 +229,11 @@ Estas regras nasceram do design. **Nenhuma entra na V1.** Cada uma será refinad
 | **RN27 — Exclusão de conta** | Conta de organizador só pode ser excluída sem eventos à venda, sem saldo a liberar e sem ser proprietária de equipe. Dados pessoais são apagados em até 30 dias (LGPD); registros fiscais são mantidos pelo prazo legal. | PF-A4 | V4 / V5 |
 | **RN28 — Reembolso feito pelo organizador** | O comprador recebe o valor integral que pagou (ingressos + taxa de serviço) pelo mesmo meio de pagamento, em até 7 dias úteis. O organizador tem descontado apenas o subtotal dos ingressos do saldo a liberar. Reembolso total cancela o pedido (`CANCELLED`) e invalida todos os tickets, que voltam ao estoque. | PD-A4, PD-A5 | V5 |
 | **RN29 — Reembolso parcial** | O organizador escolhe quais tickets devolver. Os tickets escolhidos são invalidados e voltam ao estoque; o comprador recebe o valor deles mais a taxa correspondente. O pedido continua `CONFIRMED` com os tickets restantes; o total original é mantido e o valor reembolsado é registrado à parte. Se todos os tickets forem reembolsados, o pedido passa a `CANCELLED` (RN28). | PD-A4 (parcial) | V5 |
+| **RN30 — Bloqueio por tentativas** | Após 5 tentativas de login erradas, o acesso à conta fica bloqueado por 15 minutos. A mensagem de erro nunca diz se o e-mail existe. | AC-A6 | V4 |
+| **RN31 — Redefinição de senha** | O link de redefinição vale 30 minutos e só pode ser usado uma vez. A resposta ao pedido é sempre a mesma, exista ou não a conta. | AC-A3, AC-A4, AC-A5, AC-B5 | V4 |
+| **RN32 — Confirmação de e-mail** | Toda conta nova confirma o e-mail com um código de 6 dígitos antes de comprar ou publicar. | AC-A2, AC-A7, AC-B3 | V4 |
+| **RN33 — Convite de equipe** | O convite é enviado para um e-mail específico, define o papel (Proprietário, Administrador, Financeiro, Check-in) e expira em 7 dias. Só esse e-mail pode aceitá-lo. | CF-A5, AC-B4 | V4 |
+| **RN34 — Conta por superfície** | Cadastro no site cria `PARTICIPANT`; cadastro no app cria `ORGANIZER` e a produtora, com a pessoa como Proprietária. | AC-A2, AC-B3 | V4 |
 
 ### Ressalvas importantes para a V1
 
