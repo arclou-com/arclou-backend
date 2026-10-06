@@ -567,6 +567,17 @@ Possui ingresso?
 PUBLISHED
 ```
 
+### Restrições temporárias da V1.3
+
+Decisões tomadas para caber no que já foi estudado. Cada uma tem data para acabar:
+
+| Tema | Na V1.3 | Quando muda |
+|---|---|---|
+| **Dinheiro** | Valores em **centavos, como `long`** (R$ 160,00 = `16000`). Nunca `double`: ponto flutuante não representa centavos com exatidão. | **V1.6** — vira o tipo de domínio `Money` (seção 13). |
+| **Tipos de ingresso por evento** | No máximo **5**, porque o `Event` guarda os tipos em um array de tamanho fixo. | **V1.4** — com `List`, o limite deixa de existir. O produto não define limite. |
+| **Resultado das regras** | Métodos de regra retornam `boolean` (ex.: `addTicketType`, `publish`). | **V1.5** — passam a lançar exceções com a regra que falhou. |
+| **Status** | Constantes `String` (`"DRAFT"`, `"PUBLISHED"`…). | **V1.6** — viram enums. |
+
 ### Definition of Done
 
 - regras importantes não ficam concentradas no `Main`;
@@ -616,6 +627,10 @@ findById
 findAll
 delete
 ```
+
+### Fim do limite de tipos de ingresso
+
+Com `List<TicketType>`, o `Event` deixa de ter o limite de 5 tipos da V1.3. A validação de quantidade máxima sai do código.
 
 ### Definition of Done
 
@@ -694,6 +709,22 @@ enum TicketStatus {
     SOLD
 }
 ```
+
+### Tipo de domínio `Money`
+
+Substitui os centavos soltos da V1.3 por um tipo que carrega a regra de dinheiro:
+
+```java
+Money price = Money.ofCents(16000);   // R$ 160,00
+Money total = price.times(2);         // R$ 320,00
+```
+
+- usa `BigDecimal` com 2 casas decimais internamente;
+- nunca aceita valor negativo onde o domínio não permite (RN08);
+- formata em reais para a CLI (`R$ 320,00`);
+- é imutável: operações devolvem um novo `Money`.
+
+A partir daqui, preço, subtotal e total do pedido (RN10) são `Money`. A taxa de serviço (RN17, V5) também vai usar esse tipo.
 
 ### Definition of Done
 
