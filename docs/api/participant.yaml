@@ -1,0 +1,1367 @@
+openapi: 3.1.0
+info:
+  title: Arclou API — Site do participante
+  version: 1.0.0
+  summary: Contrato da API consumida pelo site do participante (descobrir, comprar, pagar, ingressos).
+  description: |
+    Contrato **contract-first** (ADR-0004) do site do participante (web responsivo — ADR-0001).
+
+    - Guia deste contrato (fluxos de checkout e pagamento, QR, erros, mapa tela → endpoint): `docs/api/participante.md`.
+    - Convenções comuns (Money em centavos, cursor, erros RFC 9457, `x-since`): `docs/api/README.md`.
+    - Autenticação, `/me`, erros e tipos comuns vêm de `organizer.yaml` — a conta é a mesma nas duas superfícies (RN34).
+    - `x-since`: primeira versão do backend que implementa a operação.
+
+    **Dados de cartão nunca passam por esta API** (PCI-DSS): o site tokeniza o cartão direto no provedor de
+    pagamento e envia só o `cardToken`.
+  contact:
+    name: Arclou Engineering
+servers:
+  - url: https://api.arclou.com/v1
+    description: Produção
+  - url: http://localhost:8080/v1
+    description: Desenvolvimento local
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth
+    description: Entrar, criar conta, confirmar e-mail e redefinir senha (AC-A*). Mesmas operações do app.
+  - name: Discover
+    description: Explorar, página do evento e página da produtora (PT-A*). Públicas.
+  - name: Checkout
+    description: Escolher ingressos, reserva, titulares, CPF e pagamento (PT-B1…B9, PT-B11).
+  - name: Orders
+    description: Meus pedidos, instruções de pagamento, boleto, recibo e reembolso (PT-B3, B4, B7, B9, PT-C3).
+  - name: Tickets
+    description: Meus ingressos, QR code, PDF, carteira do celular e transferência (PT-C1, C2, C4, C5).
+  - name: Waitlist
+    description: Fila de espera (PT-B8, PT-B10, PT-B11 — RN22).
+  - name: Payment provider
+    description: Notificações servidor-a-servidor do provedor de pagamento (sem tela).
+
+paths:
+  # ───────────────────────── Auth (compartilhado com o app) ─────────────────────────
+  /auth/login:
+    $ref: 'organizer.yaml#/paths/~1auth~1login'
+  /auth/login/2fa:
+    $ref: 'organizer.yaml#/paths/~1auth~1login~12fa'
+  /auth/refresh:
+    $ref: 'organizer.yaml#/paths/~1auth~1refresh'
+  /auth/logout:
+    $ref: 'organizer.yaml#/paths/~1auth~1logout'
+  /auth/signup:
+    $ref: 'organizer.yaml#/paths/~1auth~1signup'
+  /auth/email/verify:
+    $ref: 'organizer.yaml#/paths/~1auth~1email~1verify'
+  /auth/email/resend:
+    $ref: 'organizer.yaml#/paths/~1auth~1email~1resend'
+  /auth/password/forgot:
+    $ref: 'organizer.yaml#/paths/~1auth~1password~1forgot'
+  /auth/password/reset:
+    $ref: 'organizer.yaml#/paths/~1auth~1password~1reset'
+  /me:
+    $ref: 'organizer.yaml#/paths/~1me'
+  /legal/documents/{slug}:
+    $ref: 'organizer.yaml#/paths/~1legal~1documents~1{slug}'
+
+  # ───────────────────────── Discover ─────────────────────────
+  /public/events:
+    get:
+      tags: [Discover]
+      operationId: exploreEvents
+      summary: Explorar eventos (PT-A1)
+      description: Só eventos `PUBLISHED` e públicos (RN05). Esgotados aparecem com `availability = SOLD_OUT`.
+      x-since: V2
+      security: []
+      parameters:
+        - name: q
+          in: query
+          description: Nome do evento, produtora ou cidade.
+          schema: { type: string }
+        - name: city
+          in: query
+          schema: { type: string, example: São Paulo }
+        - name: category
+          in: query
+          schema: { type: string, example: Tecnologia }
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+        - name: free
+          in: query
+          description: Só gratuitos (RN08).
+          schema: { type: boolean }
+        - name: featured
+          in: query
+          description: Bloco "Em destaque".
+          schema: { type: boolean }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Eventos, mais próximos primeiro, e facetas para os filtros.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/PublicEventCard' }
+                      meta:
+                        type: object
+                        properties:
+                          cities:
+                            type: array
+                            items: { type: string }
+                          categories:
+                            type: array
+                            items: { type: string }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /public/events/{eventSlug}:
+    parameters:
+      - $ref: '#/components/parameters/EventSlug'
+    get:
+      tags: [Discover]
+      operationId: getPublicEvent
+      summary: Página do evento (PT-A2)
+      description: |
+        Tipos de ingresso com preço, taxa (RN17) e disponibilidade. Tipos fora da janela de vendas (RN40) vêm com
+        `availability = NOT_STARTED` ou `ENDED`. Rascunhos e eventos não listados por link errado = `404`.
+      x-since: V2
+      security: []
+      responses:
+        '200':
+          description: Evento.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicEvent' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /public/events/{eventSlug}/views:
+    parameters:
+      - $ref: '#/components/parameters/EventSlug'
+    post:
+      tags: [Discover]
+      operationId: trackEventPageView
+      summary: Registrar visita à página do evento (base da conversão do Painel)
+      x-since: V8
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                visitorId: { type: string, description: Id anônimo do navegador (sem dado pessoal). }
+                referrer: { type: [string, 'null'] }
+      responses:
+        '204': { description: Registrada. }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /public/organizations/{organizationSlug}:
+    parameters:
+      - name: organizationSlug
+        in: path
+        required: true
+        schema: { type: string, example: arclou-producoes }
+    get:
+      tags: [Discover]
+      operationId: getPublicOrganization
+      summary: Página da produtora (PT-A3)
+      description: Próximos (`PUBLISHED`) e realizados (`FINISHED`, se `showPastEvents`). Cancelados e rascunhos nunca aparecem.
+      x-since: V3
+      security: []
+      responses:
+        '200':
+          description: Produtora.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicOrganization' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ───────────────────────── Checkout ─────────────────────────
+  /checkouts:
+    post:
+      tags: [Checkout]
+      operationId: createCheckout
+      summary: Escolher ingressos e iniciar o checkout (PT-B1 → PT-B2)
+      description: |
+        Valida disponibilidade (RN09), vendas abertas (RN05, RN18, RN40) e limite por pedido (RN19), calcula os
+        valores (RN10, RN17) e, a partir da V5, **reserva** a quantidade por 10 min (RN20).
+        Exige e-mail confirmado (RN32) a partir da V4.
+      x-since: V2
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CheckoutCreate' }
+      responses:
+        '201':
+          description: Checkout criado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Checkout' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /checkouts/{checkoutId}:
+    parameters:
+      - $ref: '#/components/parameters/CheckoutId'
+    get:
+      tags: [Checkout]
+      operationId: getCheckout
+      summary: Situação do checkout (timer, valores, alternativas se expirou — PT-B8)
+      x-since: V2
+      responses:
+        '200':
+          description: Checkout.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Checkout' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Checkout]
+      operationId: updateCheckout
+      summary: Informar CPF e titulares (PT-B2 — RN26, RN42)
+      description: Nome e e-mail do comprador vêm da conta e não são editáveis aqui.
+      x-since: V4
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CheckoutUpdate' }
+      responses:
+        '200':
+          description: Atualizado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Checkout' }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Checkout]
+      operationId: releaseCheckout
+      summary: Desistir e liberar a reserva ("Voltar ao evento")
+      x-since: V5
+      responses:
+        '204': { description: Reserva liberada; estoque devolvido. }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /checkouts/{checkoutId}/change-ticket-type:
+    parameters:
+      - $ref: '#/components/parameters/CheckoutId'
+    post:
+      tags: [Checkout]
+      operationId: changeCheckoutTicketType
+      summary: Trocar de tipo após a reserva expirar e o tipo esgotar (PT-B8)
+      description: Mantém a quantidade e os titulares informados e cria nova reserva de 10 min.
+      x-since: V5
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fromTicketTypeId, toTicketTypeId]
+              properties:
+                fromTicketTypeId: { type: string }
+                toTicketTypeId: { type: string }
+      responses:
+        '200':
+          description: Checkout atualizado e reservado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Checkout' }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+  /checkouts/{checkoutId}/installments:
+    parameters:
+      - $ref: '#/components/parameters/CheckoutId'
+    get:
+      tags: [Checkout]
+      operationId: listInstallmentOptions
+      summary: Opções de parcelamento do cartão (PT-B5)
+      description: Até 12x; juros pagos pelo comprador, conforme o emissor/provedor.
+      x-since: V5
+      parameters:
+        - name: bin
+          in: query
+          description: 6 a 8 primeiros dígitos do cartão (para saber a bandeira). Nunca o número completo.
+          schema: { type: string, pattern: '^[0-9]{6,8}$' }
+      responses:
+        '200':
+          description: Opções.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  brand: { type: [string, 'null'], example: VISA }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/InstallmentOption' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /checkouts/{checkoutId}/pay:
+    parameters:
+      - $ref: '#/components/parameters/CheckoutId'
+    post:
+      tags: [Checkout]
+      operationId: payCheckout
+      summary: Pagar — Pix, cartão, boleto ou gratuito (PT-B2, B5, B6, B7)
+      description: |
+        Cria o pedido e a cobrança. Resultado por método:
+
+        | Método | Pedido | Próxima tela |
+        |---|---|---|
+        | `PIX` | `PENDING`, expira em 30 min (RN21) | PT-B3 com QR e copia-e-cola |
+        | `BOLETO` | `PENDING`, vence antes do evento (RN21) | PT-B7 com linha digitável e PDF |
+        | `CARD` aprovado | `CONFIRMED`, tickets emitidos (RN11) | PT-B4 |
+        | `CARD` com 3-D Secure | `PENDING` + `nextAction` | redireciona e volta para `returnUrl` |
+        | `CARD` recusado | nenhum pedido; `402` | PT-B6 — reserva continua valendo |
+        | `FREE` (total zero) | `CONFIRMED` | PT-B4 |
+
+        **V2–V4:** não há cobrança real — o pedido é confirmado na hora, como na V1 ("criar → confirmar").
+      x-since: V2
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PayRequest' }
+      responses:
+        '201':
+          description: Pedido criado com a cobrança.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaymentResult' }
+        '402':
+          description: Cartão recusado. Nada foi cobrado; o checkout e a reserva continuam válidos (PT-B6).
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/CardDeclinedProblem' }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+        '410': { $ref: '#/components/responses/Gone' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  # ───────────────────────── Orders ─────────────────────────
+  /me/orders:
+    get:
+      tags: [Orders]
+      operationId: listMyOrders
+      summary: Meus pedidos (PT-C3)
+      x-since: V4
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/OrderStatus' }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Pedidos, mais recentes primeiro, com contagem por aba.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/MyOrderSummary' }
+                      meta:
+                        type: object
+                        properties:
+                          counts:
+                            type: object
+                            properties:
+                              ALL: { type: integer, example: 4 }
+                              PENDING: { type: integer, example: 0 }
+                              CONFIRMED: { type: integer, example: 3 }
+                              CANCELLED: { type: integer, example: 1 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/orders/{orderNumber}:
+    parameters:
+      - $ref: '#/components/parameters/OrderNumber'
+    get:
+      tags: [Orders]
+      operationId: getMyOrder
+      summary: Pedido (PT-B4 confirmado, PT-B9 expirado, PT-C3 detalhe)
+      x-since: V4
+      responses:
+        '200':
+          description: Pedido.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MyOrder' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /me/orders/{orderNumber}/payment:
+    parameters:
+      - $ref: '#/components/parameters/OrderNumber'
+    get:
+      tags: [Orders]
+      operationId: getMyOrderPayment
+      summary: Instruções e situação do pagamento (PT-B3 Pix, PT-B7 boleto, PT-B9 expirado)
+      description: |
+        O site consulta a cada 5 s enquanto `status = PENDING` com Pix aberto, e para quando o pedido muda.
+        Quando confirma, segue para PT-B4.
+      x-since: V5
+      responses:
+        '200':
+          description: Cobrança atual do pedido.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderPayment' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Orders]
+      operationId: changeMyOrderPaymentMethod
+      summary: Trocar a forma de pagamento de um pedido pendente (PT-B7 "Pagar com Pix")
+      description: Cancela a cobrança atual (boleto/Pix) e gera outra. Pedido continua `PENDING`; prazo recalculado (RN21).
+      x-since: V5
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PayRequest' }
+      responses:
+        '200':
+          description: Nova cobrança.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaymentResult' }
+        '402':
+          description: Cartão recusado; a cobrança anterior continua válida.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/CardDeclinedProblem' }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+  /me/orders/{orderNumber}/boleto.pdf:
+    parameters:
+      - $ref: '#/components/parameters/OrderNumber'
+    get:
+      tags: [Orders]
+      operationId: downloadBoleto
+      summary: Baixar boleto em PDF (PT-B7)
+      x-since: V5
+      responses:
+        '200':
+          description: Boleto.
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /me/orders/{orderNumber}/receipt.pdf:
+    parameters:
+      - $ref: '#/components/parameters/OrderNumber'
+    get:
+      tags: [Orders]
+      operationId: downloadReceipt
+      summary: Recibo do pedido pago (PT-C3)
+      x-since: V5
+      responses:
+        '200':
+          description: Recibo com itens, taxa, forma de pagamento e reembolsos.
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+  /me/orders/{orderNumber}/refund-requests:
+    parameters:
+      - $ref: '#/components/parameters/OrderNumber'
+    post:
+      tags: [Orders]
+      operationId: requestMyRefund
+      summary: Pedir reembolso (PT-C6 → PT-C7, RN24 — até 7 dias antes do evento)
+      description: |
+        Reembolsa os tickets escolhidos (ou todos) pelo mesmo meio de pagamento, com a taxa (RN28/RN29).
+        Ticket `USED` ou transferido não entra. Fora do prazo (`refundableUntil`), o site nem chama:
+        mostra PT-C8. Se chamar mesmo assim, `409 REFUND_WINDOW_CLOSED`.
+      x-since: V5
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ticketIds:
+                  type: array
+                  description: Vazio ou ausente = pedido inteiro.
+                  items: { type: string }
+                reason:
+                  type: string
+                  enum: [CANT_ATTEND, BOUGHT_BY_MISTAKE, EVENT_CHANGED, OTHER]
+                  description: 'Campo "Motivo" (PT-C6): Não vou poder ir · Comprei por engano · O evento mudou · Outro.'
+      responses:
+        '201':
+          description: Reembolso iniciado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MyOrder' }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+
+  # ───────────────────────── Tickets ─────────────────────────
+  /me/tickets:
+    get:
+      tags: [Tickets]
+      operationId: listMyTickets
+      summary: Meus ingressos, agrupados por evento (PT-C1)
+      description: Inclui ingressos comprados para mim e os transferidos para o meu e-mail.
+      x-since: V4
+      parameters:
+        - name: scope
+          in: query
+          schema: { type: string, enum: [UPCOMING, PAST], default: UPCOMING }
+      responses:
+        '200':
+          description: Grupos por evento e contagem das abas.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, counts]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/MyTicketGroup' }
+                  counts:
+                    type: object
+                    properties:
+                      UPCOMING: { type: integer, example: 3 }
+                      PAST: { type: integer, example: 1 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/tickets/{ticketId}:
+    parameters:
+      - $ref: '#/components/parameters/TicketId'
+    get:
+      tags: [Tickets]
+      operationId: getMyTicket
+      summary: Ingresso com QR code (PT-C2, PT-C5)
+      description: |
+        O site guarda o ingresso aberto no aparelho para mostrar o QR sem internet.
+        Ingresso transferido (PT-C5) volta com `transfer` preenchido e **sem** `qr`.
+      x-since: V4
+      responses:
+        '200':
+          description: Ingresso.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MyTicket' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /me/tickets/{ticketId}/qr:
+    parameters:
+      - $ref: '#/components/parameters/TicketId'
+    get:
+      tags: [Tickets]
+      operationId: getMyTicketQrImage
+      summary: Imagem do QR code (para e-mail, PDF ou quem não renderiza no cliente)
+      description: O site normalmente desenha o QR a partir de `qr.payload`; esta rota gera a mesma imagem.
+      x-since: V5
+      parameters:
+        - name: format
+          in: query
+          schema: { type: string, enum: [svg, png], default: svg }
+        - name: size
+          in: query
+          schema: { type: integer, minimum: 128, maximum: 1024, default: 512 }
+      responses:
+        '200':
+          description: QR code.
+          content:
+            image/svg+xml:
+              schema: { type: string }
+            image/png:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+  /me/tickets/{ticketId}/pdf:
+    parameters:
+      - $ref: '#/components/parameters/TicketId'
+    get:
+      tags: [Tickets]
+      operationId: downloadMyTicketPdf
+      summary: Baixar PDF do ingresso (PT-C2)
+      x-since: V5
+      responses:
+        '200':
+          description: PDF com QR, titular, tipo, evento e local.
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+  /me/tickets/{ticketId}/wallet:
+    parameters:
+      - $ref: '#/components/parameters/TicketId'
+    get:
+      tags: [Tickets]
+      operationId: getMyTicketWalletPass
+      summary: Adicionar à carteira do celular (PT-C2)
+      description: |
+        `APPLE` devolve o arquivo `.pkpass`; `GOOGLE` devolve a URL "Salvar no Google Wallet".
+        O passe usa o mesmo `qr.payload` e é atualizado (ou invalidado) quando o QR muda (RN23).
+      x-since: V6
+      parameters:
+        - name: platform
+          in: query
+          required: true
+          schema: { type: string, enum: [APPLE, GOOGLE] }
+      responses:
+        '200':
+          description: Passe.
+          content:
+            application/vnd.apple.pkpass:
+              schema: { type: string, format: binary }
+            application/json:
+              schema:
+                type: object
+                required: [saveUrl]
+                properties:
+                  saveUrl: { type: string, format: uri }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+  /me/tickets/{ticketId}/transfer:
+    parameters:
+      - $ref: '#/components/parameters/TicketId'
+    post:
+      tags: [Tickets]
+      operationId: transferMyTicket
+      summary: Transferir ingresso (PT-C4 → PT-C5, RN23)
+      description: |
+        Até 24 h antes do evento; só ticket `ISSUED`. Troca o titular, gera **novo** QR (o anterior deixa de valer)
+        e não pode ser desfeita. O ingresso aparece em "Meus ingressos" de quem tem conta com o e-mail informado.
+      x-since: V4
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email]
+              properties:
+                name: { type: string, example: Bruno Souza }
+                email: { type: string, format: email, example: bruno.souza@email.com }
+                message: { type: string, maxLength: 280 }
+      responses:
+        '200':
+          description: Transferido.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MyTicket' }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  # ───────────────────────── Waitlist ─────────────────────────
+  /me/waitlist-entries:
+    get:
+      tags: [Waitlist]
+      operationId: listMyWaitlistEntries
+      summary: Minhas filas de espera
+      x-since: V6
+      responses:
+        '200':
+          description: Entradas ativas e recentes.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/WaitlistEntry' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Waitlist]
+      operationId: joinWaitlist
+      summary: Entrar na fila de um tipo esgotado (PT-B8 → PT-B10, RN22)
+      description: Nada é cobrado. Quantidade até o limite por pedido (RN19). Uma entrada por pessoa e tipo.
+      x-since: V6
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ticketTypeId, quantity]
+              properties:
+                ticketTypeId: { type: string }
+                quantity: { type: integer, minimum: 1, example: 2 }
+      responses:
+        '201':
+          description: Na fila.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WaitlistEntry' }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+  /me/waitlist-entries/{entryId}:
+    parameters:
+      - name: entryId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Waitlist]
+      operationId: getMyWaitlistEntry
+      summary: Posição na fila (PT-B10) ou "Sua vez" (PT-B11)
+      description: Em `NOTIFIED`, `checkoutId` aponta para o checkout já reservado por 30 min (só Pix e cartão).
+      x-since: V6
+      responses:
+        '200':
+          description: Entrada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WaitlistEntry' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Waitlist]
+      operationId: leaveWaitlist
+      summary: Sair da fila
+      x-since: V6
+      responses:
+        '204': { description: Saiu da fila. }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ───────────────────────── Payment provider ─────────────────────────
+  /payments/webhooks/{provider}:
+    parameters:
+      - name: provider
+        in: path
+        required: true
+        schema: { type: string, example: provider }
+    post:
+      tags: [Payment provider]
+      operationId: receivePaymentProviderEvent
+      summary: Evento do provedor de pagamento (Pix pago, boleto compensado, cartão, estorno)
+      description: |
+        Chamado pelo provedor, não pelo site. Assinatura verificada pelo header `X-Signature` (HMAC do corpo com o
+        segredo do provedor). Idempotente por `id`. Pagamento recebido para pedido já cancelado é devolvido
+        automaticamente (RN21).
+      x-since: V5
+      security: []
+      parameters:
+        - name: X-Signature
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProviderEvent' }
+      responses:
+        '204': { description: Recebido (ou já processado). }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Mesmo token do app (conta única — RN34).
+
+  parameters:
+    Cursor: { $ref: 'organizer.yaml#/components/parameters/Cursor' }
+    Limit: { $ref: 'organizer.yaml#/components/parameters/Limit' }
+    IdempotencyKey: { $ref: 'organizer.yaml#/components/parameters/IdempotencyKey' }
+    EventSlug:
+      name: eventSlug
+      in: path
+      required: true
+      description: Slug do evento (`/e/<slug>`). Até a V3, quando o slug passa a existir, aceita o id.
+      schema: { type: string, example: tech-summit-2026 }
+    CheckoutId:
+      name: checkoutId
+      in: path
+      required: true
+      schema: { type: string, example: chk_8f3a }
+    OrderNumber:
+      name: orderNumber
+      in: path
+      required: true
+      description: Número visível do pedido (`/pedidos/1042`). Só pedidos da própria conta.
+      schema: { type: string, example: '1042' }
+    TicketId:
+      name: ticketId
+      in: path
+      required: true
+      schema: { type: string, example: tkt_10422 }
+
+  responses:
+    ValidationError: { $ref: 'organizer.yaml#/components/responses/ValidationError' }
+    RuleViolation: { $ref: 'organizer.yaml#/components/responses/RuleViolation' }
+    Unauthorized: { $ref: 'organizer.yaml#/components/responses/Unauthorized' }
+    Forbidden:
+      description: E-mail ainda não confirmado (RN32) ou ação não permitida.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound: { $ref: 'organizer.yaml#/components/responses/NotFound' }
+    Gone:
+      description: Checkout expirado ou já concluído.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    TooManyRequests: { $ref: 'organizer.yaml#/components/responses/TooManyRequests' }
+
+  schemas:
+    # ─── Comuns (de organizer.yaml) ───
+    Problem: { $ref: 'organizer.yaml#/components/schemas/Problem' }
+    Money: { $ref: 'organizer.yaml#/components/schemas/Money' }
+    Page: { $ref: 'organizer.yaml#/components/schemas/Page' }
+    Location: { $ref: 'organizer.yaml#/components/schemas/Location' }
+    EventFormat: { $ref: 'organizer.yaml#/components/schemas/EventFormat' }
+    OrderStatus: { $ref: 'organizer.yaml#/components/schemas/OrderStatus' }
+    PaymentMethod: { $ref: 'organizer.yaml#/components/schemas/PaymentMethod' }
+    TicketStatus: { $ref: 'organizer.yaml#/components/schemas/TicketStatus' }
+    RefundState: { $ref: 'organizer.yaml#/components/schemas/RefundState' }
+
+    # ─── Discover ───
+    Availability:
+      type: string
+      enum: [AVAILABLE, LOW, SOLD_OUT, NOT_STARTED, ENDED, PAUSED]
+      description: |
+        `LOW` = 10% ou menos restantes ("Últimos ingressos"). `NOT_STARTED`/`ENDED` = fora da janela do lote (RN40).
+        `PAUSED` = vendas pausadas (RN18).
+    PriceRange:
+      type: object
+      required: [min, max, free]
+      properties:
+        min: { $ref: '#/components/schemas/Money' }
+        max: { $ref: '#/components/schemas/Money' }
+        free: { type: boolean, description: Todos os tipos custam zero (RN08). }
+    PublicEventCard:
+      type: object
+      required: [id, slug, name, startsAt, availability, priceFrom]
+      properties:
+        id: { type: string }
+        slug: { type: string, example: tech-summit-2026 }
+        name: { type: string, example: Tech Summit 2026 }
+        summary: { type: [string, 'null'], example: 'Um dia inteiro de palestras sobre Java, cloud e arquitetura.' }
+        startsAt: { type: string, format: date-time }
+        format: { $ref: '#/components/schemas/EventFormat' }
+        venueName: { type: [string, 'null'], example: Expo Center Norte }
+        city: { type: [string, 'null'], example: 'São Paulo, SP' }
+        category: { type: [string, 'null'], example: Tecnologia }
+        coverUrl: { type: [string, 'null'] }
+        featured: { type: boolean }
+        availability: { $ref: '#/components/schemas/Availability' }
+        priceFrom: { $ref: '#/components/schemas/PriceRange' }
+        organization:
+          type: object
+          properties:
+            name: { type: string, example: Arclou Produções }
+            slug: { type: string, example: arclou-producoes }
+    PublicTicketType:
+      type: object
+      required: [id, name, price, serviceFee, priceWithFee, availability, maxPerOrder]
+      properties:
+        id: { type: string }
+        name: { type: string, example: VIP }
+        description: { type: [string, 'null'], example: 'Área VIP, almoço e meet & greet' }
+        price: { $ref: '#/components/schemas/Money' }
+        serviceFee:
+          $ref: '#/components/schemas/Money'
+        priceWithFee:
+          $ref: '#/components/schemas/Money'
+        availability: { $ref: '#/components/schemas/Availability' }
+        remaining: { type: [integer, 'null'], description: Só quando `LOW`. }
+        salesStartAt: { type: [string, 'null'], format: date-time }
+        salesEndAt: { type: [string, 'null'], format: date-time }
+        maxPerOrder: { type: integer, example: 6, description: RN19 — já descontado o que a pessoa pode comprar. }
+        requiresDocument: { type: boolean, description: 'RN41 — ex.: meia-entrada, carteirinha na entrada.' }
+        waitlistEnabled: { type: boolean, description: RN22 — mostra "Entrar na fila" quando esgotado. }
+    PublicEvent:
+      allOf:
+        - $ref: '#/components/schemas/PublicEventCard'
+        - type: object
+          required: [ticketTypes, policies]
+          properties:
+            description: { type: [string, 'null'] }
+            endsAt: { type: [string, 'null'], format: date-time }
+            gatesOpenAt: { type: [string, 'null'], format: date-time }
+            ageRating: { type: [string, 'null'], example: Livre }
+            location:
+              oneOf:
+                - $ref: '#/components/schemas/Location'
+                - type: 'null'
+            salesState: { type: string, enum: [OPEN, PAUSED, CLOSED, SOLD_OUT] }
+            salesEndAt: { type: [string, 'null'], format: date-time }
+            salesPublicNotice: { type: [string, 'null'], example: Ajustando os lotes — voltamos já. }
+            ticketTypes:
+              type: array
+              items: { $ref: '#/components/schemas/PublicTicketType' }
+            policies:
+              type: object
+              properties:
+                refundUntil: { type: [string, 'null'], format: date-time, description: RN24 }
+                transferUntil: { type: [string, 'null'], format: date-time, description: RN23 — 24 h antes. }
+                maxPerOrder: { type: integer, example: 6 }
+                feeDescription: { type: string, example: 'Taxa de serviço de 8% por ingresso (mínimo R$ 2,50)' }
+            organization:
+              type: object
+              properties:
+                name: { type: string }
+                slug: { type: string }
+                logoUrl: { type: [string, 'null'] }
+                about: { type: [string, 'null'] }
+            publicUrl: { type: string, example: https://arclou.com/e/tech-summit-2026 }
+    PublicOrganization:
+      type: object
+      required: [name, slug, upcomingEvents]
+      properties:
+        name: { type: string, example: Arclou Produções }
+        slug: { type: string }
+        city: { type: [string, 'null'] }
+        about: { type: [string, 'null'] }
+        logoUrl: { type: [string, 'null'] }
+        coverUrl: { type: [string, 'null'] }
+        instagram: { type: [string, 'null'] }
+        website: { type: [string, 'null'] }
+        contactEmail: { type: [string, 'null'], format: email }
+        stats:
+          type: object
+          properties:
+            events: { type: integer, example: 4 }
+            ticketsSold: { type: [integer, 'null'], description: Só se `showTicketsSold`. }
+        upcomingEvents:
+          type: array
+          items: { $ref: '#/components/schemas/PublicEventCard' }
+        pastEvents:
+          type: array
+          description: Vazio se a produtora ocultar os realizados.
+          items: { $ref: '#/components/schemas/PublicEventCard' }
+
+    # ─── Checkout ───
+    CheckoutCreate:
+      type: object
+      required: [eventId, items]
+      properties:
+        eventId: { type: string }
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [ticketTypeId, quantity]
+            properties:
+              ticketTypeId: { type: string }
+              quantity: { type: integer, minimum: 1, example: 2 }
+    Pricing:
+      type: object
+      required: [subtotal, serviceFee, total]
+      description: Calculado pelo servidor (RN10, RN17). O site nunca soma valores.
+      properties:
+        subtotal: { $ref: '#/components/schemas/Money' }
+        serviceFee: { $ref: '#/components/schemas/Money' }
+        total: { $ref: '#/components/schemas/Money' }
+        feePassedToBuyer: { type: boolean }
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              ticketTypeId: { type: string }
+              ticketTypeName: { type: string, example: VIP }
+              quantity: { type: integer, example: 2 }
+              unitPrice: { $ref: '#/components/schemas/Money' }
+              unitFee: { $ref: '#/components/schemas/Money' }
+              subtotal: { $ref: '#/components/schemas/Money' }
+    CheckoutTicketSlot:
+      type: object
+      required: [slotId, ticketTypeId, ticketTypeName]
+      properties:
+        slotId: { type: string, example: slot_1 }
+        ticketTypeId: { type: string }
+        ticketTypeName: { type: string, example: VIP }
+        holderName: { type: [string, 'null'], example: Ana Souza, description: Padrão = comprador (RN26). }
+        holderEmail: { type: [string, 'null'], format: email }
+        requiresDocument: { type: boolean }
+    PaymentMethodOption:
+      type: object
+      required: [method, available]
+      properties:
+        method: { $ref: '#/components/schemas/PaymentMethod' }
+        available: { type: boolean }
+        description: { type: string, example: Aprovação na hora }
+        unavailableReason:
+          type: [string, 'null']
+          enum: [WAITLIST_RESERVATION, EVENT_TOO_CLOSE, NOT_FREE, PAID_ORDER, null]
+          description: |
+            `WAITLIST_RESERVATION`: boleto não cabe nos 30 min da fila (RN22).
+            `EVENT_TOO_CLOSE`: boleto não compensaria antes do evento (RN21).
+    Checkout:
+      type: object
+      required: [id, status, event, slots, pricing, paymentMethods]
+      properties:
+        id: { type: string, example: chk_8f3a }
+        status:
+          type: string
+          enum: [ACTIVE, EXPIRED, COMPLETED, RELEASED]
+          description: '`EXPIRED` = reserva de 10 min (ou 30 min da fila) acabou sem pagamento (RN20).'
+        source: { type: string, enum: [DIRECT, WAITLIST], default: DIRECT }
+        reservedUntil:
+          type: [string, 'null']
+          format: date-time
+          description: Timer "reservados por 09:41". `null` antes da V5 (sem reserva).
+        event:
+          type: object
+          properties:
+            id: { type: string }
+            slug: { type: string }
+            name: { type: string, example: Tech Summit 2026 }
+            startsAt: { type: string, format: date-time }
+            venueName: { type: [string, 'null'] }
+        buyer:
+          type: object
+          description: Da conta; não editável no checkout.
+          properties:
+            name: { type: string, example: Ana Souza }
+            email: { type: string, format: email, example: ana.souza@email.com }
+            document: { type: [string, 'null'], description: 'CPF informado (RN42); exibido como digitado só para o próprio comprador.' }
+        slots:
+          type: array
+          items: { $ref: '#/components/schemas/CheckoutTicketSlot' }
+        pricing: { $ref: '#/components/schemas/Pricing' }
+        paymentMethods:
+          type: array
+          items: { $ref: '#/components/schemas/PaymentMethodOption' }
+        refundPolicy: { type: string, example: Reembolso até 7 dias antes do evento. }
+        orderNumber: { type: [string, 'null'], description: Preenchido em `COMPLETED`. }
+        unavailable:
+          type: [object, 'null']
+          description: PT-B8 — presente quando a reserva expirou e algum tipo esgotou.
+          properties:
+            ticketTypeId: { type: string }
+            ticketTypeName: { type: string, example: VIP }
+            alternatives:
+              type: array
+              description: Outros tipos com quantidade suficiente (mesma quantidade e titulares).
+              items:
+                type: object
+                properties:
+                  ticketTypeId: { type: string }
+                  name: { type: string, example: Pista }
+                  priceWithFee: { $ref: '#/components/schemas/Money' }
+                  totalWithFee: { $ref: '#/components/schemas/Money' }
+                  remaining: { type: integer, example: 40 }
+                  requiresDocument: { type: boolean }
+            waitlistEnabled: { type: boolean }
+    CheckoutUpdate:
+      type: object
+      properties:
+        buyerDocument: { type: string, example: 123.456.789-09, description: CPF — obrigatório quando o total é maior que zero (RN42). }
+        holders:
+          type: array
+          items:
+            type: object
+            required: [slotId, name]
+            properties:
+              slotId: { type: string }
+              name: { type: string, example: Bruno Souza }
+              email: { type: [string, 'null'], format: email }
+    InstallmentOption:
+      type: object
+      required: [count, installmentAmount, total]
+      properties:
+        count: { type: integer, minimum: 1, maximum: 12, example: 3 }
+        installmentAmount: { $ref: '#/components/schemas/Money' }
+        total: { $ref: '#/components/schemas/Money' }
+        interestFree: { type: boolean }
+        monthlyRatePercent: { type: [number, 'null'], example: 2.99 }
+    PayRequest:
+      oneOf:
+        - $ref: '#/components/schemas/PayWithPix'
+        - $ref: '#/components/schemas/PayWithCard'
+        - $ref: '#/components/schemas/PayWithBoleto'
+        - $ref: '#/components/schemas/PayFree'
+      discriminator:
+        propertyName: method
+        mapping:
+          PIX: '#/components/schemas/PayWithPix'
+          CARD: '#/components/schemas/PayWithCard'
+          BOLETO: '#/components/schemas/PayWithBoleto'
+          FREE: '#/components/schemas/PayFree'
+    PayWithPix:
+      type: object
+      required: [method]
+      properties:
+        method: { type: string, const: PIX }
+    PayWithBoleto:
+      type: object
+      required: [method]
+      properties:
+        method: { type: string, const: BOLETO }
+    PayFree:
+      type: object
+      required: [method]
+      properties:
+        method: { type: string, const: FREE }
+    PayWithCard:
+      type: object
+      required: [method, cardToken, installments]
+      properties:
+        method: { type: string, const: CARD }
+        cardToken: { type: string, description: Token do provedor (o número do cartão nunca chega à Arclou). }
+        installments: { type: integer, minimum: 1, maximum: 12, example: 1 }
+        returnUrl: { type: string, format: uri, description: Volta do 3-D Secure. }
+    PixCharge:
+      type: object
+      required: [qrCodePayload, expiresAt, amount]
+      properties:
+        qrCodePayload: { type: string, description: BR Code (EMV) — o mesmo texto do "Copiar código Pix". O site gera o QR a partir dele. }
+        qrCodeImage: { type: [string, 'null'], description: 'PNG em data URI, para quem não gera o QR no cliente.' }
+        expiresAt: { type: string, format: date-time, description: 30 min (RN21). }
+        amount: { $ref: '#/components/schemas/Money' }
+    BoletoCharge:
+      type: object
+      required: [digitableLine, barcode, dueDate, amount, pdfUrl]
+      properties:
+        digitableLine: { type: string, example: '23793.38128 60000.000003 00000.000400 1 92340000034560', description: 'Linha digitável (47 dígitos, formatada) — "Copiar linha digitável".' }
+        barcode: { type: string, pattern: '^[0-9]{44}$', example: '23791923400000345603381260000000000000000040', description: Código de barras ITF-25 (44 dígitos) para o site desenhar. }
+        dueDate: { type: string, format: date, description: 'Antes do evento, com tempo de compensação (RN21).' }
+        amount: { $ref: '#/components/schemas/Money' }
+        pdfUrl: { type: string, description: '`/me/orders/{n}/boleto.pdf`.' }
+    CardCharge:
+      type: object
+      required: [brand, last4, installments]
+      properties:
+        brand: { type: string, example: VISA }
+        last4: { type: string, example: '4242' }
+        installments: { type: integer, example: 3 }
+        installmentAmount: { $ref: '#/components/schemas/Money' }
+        totalCharged: { $ref: '#/components/schemas/Money' }
+    NextAction:
+      type: object
+      required: [type, url]
+      properties:
+        type: { type: string, const: REDIRECT_3DS }
+        url: { type: string, format: uri }
+    PaymentResult:
+      type: object
+      required: [orderNumber, orderStatus, method]
+      properties:
+        orderNumber: { type: string, example: '1042' }
+        orderStatus: { $ref: '#/components/schemas/OrderStatus' }
+        method: { $ref: '#/components/schemas/PaymentMethod' }
+        total: { $ref: '#/components/schemas/Money' }
+        pix: { oneOf: [{ $ref: '#/components/schemas/PixCharge' }, { type: 'null' }] }
+        boleto: { oneOf: [{ $ref: '#/components/schemas/BoletoCharge' }, { type: 'null' }] }
+        card: { oneOf: [{ $ref: '#/components/schemas/CardCharge' }, { type: 'null' }] }
+        nextAction: { oneOf: [{ $ref: '#/components/schemas/NextAction' }, { type: 'null' }] }
+    CardDeclinedProblem:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          properties:
+            declineReason:
+              type: string
+              enum: [INSUFFICIENT_FUNDS, CARD_EXPIRED, INVALID_DATA, SUSPECTED_FRAUD, ISSUER_UNAVAILABLE, GENERIC]
+              description: Motivo genérico mostrado na PT-B6 (o código bruto do emissor não é exposto).
+            reservedUntil: { type: [string, 'null'], format: date-time, description: A reserva continua valendo. }
+
+    # ─── Orders ───
+    OrderPayment:
+      type: object
+      required: [orderNumber, orderStatus, method, status]
+      properties:
+        orderNumber: { type: string }
+        orderStatus: { $ref: '#/components/schemas/OrderStatus' }
+        method: { $ref: '#/components/schemas/PaymentMethod' }
+        status:
+          type: string
+          enum: [WAITING, PAID, EXPIRED, CANCELLED, REFUNDED_LATE]
+          description: '`EXPIRED` = Pix vencido / boleto não pago (PT-B9). `REFUNDED_LATE` = pago após o cancelamento e devolvido (RN21).'
+        total: { $ref: '#/components/schemas/Money' }
+        pix: { oneOf: [{ $ref: '#/components/schemas/PixCharge' }, { type: 'null' }] }
+        boleto: { oneOf: [{ $ref: '#/components/schemas/BoletoCharge' }, { type: 'null' }] }
+        card: { oneOf: [{ $ref: '#/components/schemas/CardCharge' }, { type: 'null' }] }
+        paidAt: { type: [string, 'null'], format: date-time }
+        eventSlug: { type: string, description: Para "Escolher ingressos de novo" após expirar. }
+    MyOrderSummary:
+      type: object
+      required: [number, status, event, total, createdAt]
+      properties:
+        number: { type: string, example: '1042' }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        refundState: { $ref: '#/components/schemas/RefundState' }
+        event:
+          type: object
+          properties:
+            name: { type: string, example: Tech Summit 2026 }
+            slug: { type: string }
+            startsAt: { type: string, format: date-time }
+        itemsSummary: { type: string, example: 2× VIP }
+        total: { $ref: '#/components/schemas/Money' }
+        method: { $ref: '#/components/schemas/PaymentMethod' }
+        statusDetail: { type: [string, 'null'], example: Pix expirado }
+        createdAt: { type: string, format: date-time }
+    MyOrder:
+      allOf:
+        - $ref: '#/components/schemas/MyOrderSummary'
+        - type: object
+          properties:
+            pricing: { $ref: '#/components/schemas/Pricing' }
+            payment: { $ref: '#/components/schemas/OrderPayment' }
+            buyerDocumentMasked: { type: [string, 'null'], example: •••.456.789-•• }
+            tickets:
+              type: array
+              items: { $ref: '#/components/schemas/MyTicketSummary' }
+            refundedAmount: { $ref: '#/components/schemas/Money' }
+            refundableUntil: { type: [string, 'null'], format: date-time, description: 'RN24 — depois disso, PT-C8.' }
+            transferableUntil: { type: [string, 'null'], format: date-time, description: RN23 — oferecido na PT-C8. }
+            refunds:
+              type: array
+              description: PT-C7 — reembolsos pedidos pelo comprador ou feitos pela produtora.
+              items: { $ref: '#/components/schemas/MyRefund' }
+            cancellationReason:
+              type: [string, 'null']
+              enum: [PAYMENT_EXPIRED, CARD_DECLINED, EVENT_CANCELLED, REFUNDED, ORGANIZER, null]
+
+    MyRefund:
+      type: object
+      required: [id, amount, status, requestedAt, ticketIds]
+      properties:
+        id: { type: string }
+        amount: { $ref: '#/components/schemas/Money' }
+        ticketIds:
+          type: array
+          items: { type: string }
+        status: { type: string, enum: [PROCESSING, DONE, FAILED] }
+        destination: { type: string, example: Mastercard ••••4417, description: Mesmo meio do pagamento. }
+        requestedBy: { type: string, enum: [BUYER, ORGANIZER, EVENT_CANCELLED] }
+        requestedAt: { type: string, format: date-time }
+        expectedBy: { type: string, format: date, description: Até 7 dias úteis. }
+        completedAt: { type: [string, 'null'], format: date-time }
+
+    # ─── Tickets ───
+    MyTicketSummary:
+      type: object
+      required: [id, number, ticketTypeName, holderName, status]
+      properties:
+        id: { type: string, example: tkt_10422 }
+        number: { type: string, example: '10422' }
+        ticketTypeName: { type: string, example: VIP }
+        holderName: { type: string, example: Bruno Souza }
+        status: { $ref: '#/components/schemas/TicketStatus' }
+        requiresDocument: { type: boolean }
+        transferred: { type: boolean }
+        paidAmount:
+          $ref: '#/components/schemas/Money'
+          description: 'Preço + taxa deste ingresso — valor devolvido se for reembolsado (PT-C6: "R$ 54,00").'
+    TicketQr:
+      type: object
+      required: [payload, format, issuedAt]
+      properties:
+        payload:
+          type: string
+          example: arc1_5d1c0e7b9a3f4c28b6e1f0a2d7c94b3e
+          description: |
+            Token opaco do ingresso (`qrToken`, ≥ 128 bits aleatórios). É o conteúdo do QR. O check-in compara o
+            SHA-256 dele com a lista offline (ver `CheckInSnapshot` em organizer.yaml). Muda na transferência (RN23).
+        format: { type: string, const: QR_CODE }
+        issuedAt: { type: string, format: date-time }
+    MyTicket:
+      allOf:
+        - $ref: '#/components/schemas/MyTicketSummary'
+        - type: object
+          required: [event, orderNumber]
+          properties:
+            position: { type: string, example: Ingresso 2 de 2 }
+            holderEmail: { type: [string, 'null'], format: email }
+            orderNumber: { type: string, example: '1042' }
+            event:
+              type: object
+              properties:
+                name: { type: string }
+                slug: { type: string }
+                startsAt: { type: string, format: date-time }
+                gatesOpenAt: { type: [string, 'null'], format: date-time }
+                venueName: { type: [string, 'null'] }
+                address: { type: [string, 'null'], example: 'Rua José Bernardo Pinto, 333 · Vila Guilherme, São Paulo/SP' }
+            qr:
+              oneOf:
+                - $ref: '#/components/schemas/TicketQr'
+                - type: 'null'
+              description: '`null` se transferido por mim, cancelado ou antes da V5.'
+            usedAt: { type: [string, 'null'], format: date-time }
+            documentNotice: { type: [string, 'null'], example: Meia-entrada · apresente a carteirinha na entrada }
+            transferableUntil: { type: [string, 'null'], format: date-time, description: RN23 — 24 h antes. }
+            canTransfer: { type: boolean }
+            transfer:
+              type: [object, 'null']
+              description: PT-C5 — preenchido quando o ingresso saiu desta conta, ou chegou por transferência.
+              properties:
+                direction: { type: string, enum: [SENT, RECEIVED] }
+                at: { type: string, format: date-time }
+                counterpartName: { type: string, example: Bruno Souza }
+                counterpartEmailMasked: { type: string, example: b•••••@email.com }
+    MyTicketGroup:
+      type: object
+      required: [event, tickets]
+      properties:
+        event:
+          type: object
+          properties:
+            name: { type: string, example: Tech Summit 2026 }
+            slug: { type: string }
+            startsAt: { type: string, format: date-time }
+            venueName: { type: [string, 'null'] }
+            city: { type: [string, 'null'] }
+            coverUrl: { type: [string, 'null'] }
+        summary: { type: string, example: 2 ingressos · VIP }
+        tickets:
+          type: array
+          items: { $ref: '#/components/schemas/MyTicketSummary' }
+
+    # ─── Waitlist ───
+    WaitlistEntry:
+      type: object
+      required: [id, status, ticketTypeName, quantity]
+      properties:
+        id: { type: string }
+        status:
+          type: string
+          enum: [WAITING, NOTIFIED, CONVERTED, EXPIRED, LEFT, CLOSED]
+          description: '`CLOSED` = vendas terminaram e a fila foi encerrada (RN22).'
+        event:
+          type: object
+          properties:
+            name: { type: string }
+            slug: { type: string }
+            startsAt: { type: string, format: date-time }
+        ticketTypeId: { type: string }
+        ticketTypeName: { type: string, example: VIP }
+        quantity: { type: integer, example: 2 }
+        position: { type: [integer, 'null'], example: 3, description: Em `WAITING`. }
+        joinedAt: { type: string, format: date-time }
+        checkoutId: { type: [string, 'null'], description: Em `NOTIFIED` — checkout com reserva exclusiva. }
+        reservedUntil: { type: [string, 'null'], format: date-time, description: Em `NOTIFIED` — 30 min. }
+
+    # ─── Payment provider ───
+    ProviderEvent:
+      type: object
+      required: [id, type, chargeId, occurredAt]
+      properties:
+        id: { type: string, description: Id do evento no provedor (idempotência). }
+        type:
+          type: string
+          enum: [CHARGE_PAID, CHARGE_FAILED, CHARGE_EXPIRED, CHARGE_REFUNDED, CHARGEBACK_OPENED, THREE_DS_COMPLETED]
+        chargeId: { type: string }
+        amount: { $ref: '#/components/schemas/Money' }
+        occurredAt: { type: string, format: date-time }
