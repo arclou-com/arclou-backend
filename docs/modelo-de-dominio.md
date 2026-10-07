@@ -32,7 +32,7 @@ User ──< Membership >── Organization ──< Event ──< TicketType
 | User | V1 | |
 | Event, TicketType, Order, OrderItem, Ticket | V1 | núcleo da V1 |
 | Organization, Membership, Session | V4 | ADR-0003 |
-| Reservation, Refund, Gate, CheckInScan, BankAccount, Payout | V5 | pagamentos e check-in (ADR-0002) |
+| Reservation, Charge, Refund, Gate, CheckInScan, BankAccount, Payout | V5 | pagamentos e check-in (ADR-0002) |
 | WaitlistEntry, NotificationPreference | V6 | RN22 e notificações |
 | SupportRequest | V3 | suporte (MA-A5) |
 | EventPageView | V8 | conversão do Painel |
@@ -139,7 +139,7 @@ User ──< Membership >── Organization ──< Event ──< TicketType
 | `id`, `order`, `participant`, `event`, `ticketType`, `status` | V1 | `AVAILABLE` / `SOLD` na V1 |
 | `status` (novo ciclo) | V5 | `ISSUED` → `USED` / `CANCELLED` (ADR-0002) |
 | `holderName`, `holderEmail` | V4 | Titular por ingresso (RN26); transferência troca o titular (RN23) |
-| `qrToken` | V5 | Renovado na transferência (QR anterior deixa de valer) |
+| `qrToken` | V5 | Conteúdo do QR: token opaco aleatório (`arc1_…`). Renovado na transferência (QR anterior deixa de valer) |
 | `usedAt`, `usedGate`, `validatedBy` | V5 | RN35 |
 
 ## CheckInScan — leitura na entrada (V5; offline V7)
@@ -156,6 +156,19 @@ User ──< Membership >── Organization ──< Event ──< TicketType
 | Campo | Descrição |
 |---|---|
 | `ticketType`, `quantity`, `expiresAt`, `source` (`CHECKOUT` / `WAITLIST`) | 10 min no checkout (RN20); 30 min para a fila (RN22) |
+
+O **checkout** da API (`/checkouts`, ver `docs/api/participante.md`) é a reserva vista pelo comprador: as `Reservation` de cada tipo, os titulares escolhidos (RN26) e o CPF (RN42). Até a V4, sem reserva, o checkout é o próprio pedido `PENDING` da V1 (criar → confirmar).
+
+## Charge — cobrança de um pedido (V5)
+
+Um pedido pode ter mais de uma cobrança (ex.: boleto cancelado e trocado por Pix — PT-B7). Só uma fica ativa.
+
+| Campo | Descrição |
+|---|---|
+| `order`, `method` (`PIX` / `CARD` / `BOLETO`), `amount`, `status` (`WAITING` / `PAID` / `EXPIRED` / `CANCELLED` / `FAILED` / `REFUNDED`), `providerChargeId`, `expiresAt`, `paidAt` | Base do `paymentMethod`, `paidAt` e `expiresAt` do pedido (RN21) |
+| Pix: `pixPayload` (BR Code) | "Copiar código Pix"; o QR é gerado a partir dele |
+| Boleto: `digitableLine`, `barcode`, `dueDate` | PT-B7 |
+| Cartão: `brand`, `last4`, `installments` | **Nunca** o número, validade ou CVV (o cartão é tokenizado no provedor) |
 
 ## Refund — reembolso (V5)
 

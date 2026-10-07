@@ -1,4 +1,9 @@
-# Lint do contrato de API (docs/api/openapi.yaml): npx @redocly/cli lint
+# Lint dos contratos de API: npx @redocly/cli lint
+apis:
+  organizer:
+    root: docs/api/organizer.yaml
+  participant:
+    root: docs/api/participant.yaml
 extends:
   - recommended
 rules:

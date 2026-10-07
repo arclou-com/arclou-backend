@@ -16,12 +16,17 @@ Alternativas consideradas:
 
 ## Decision
 
-**Contract-first, com OpenAPI 3.1** em [`docs/api/openapi.yaml`](../api/openapi.yaml), guia em [`docs/api/README.md`](../api/README.md).
+**Contract-first, com OpenAPI 3.1**, um contrato por superfície:
+
+- app do organizador: [`docs/api/organizer.yaml`](../api/organizer.yaml), guia em [`docs/api/README.md`](../api/README.md);
+- site do participante: [`docs/api/participant.yaml`](../api/participant.yaml), guia em [`docs/api/participante.md`](../api/participante.md).
+
+Autenticação, `/me`, erros e tipos comuns ficam no contrato do organizador e são referenciados pelo do participante (conta única — RN34).
 
 - O contrato descreve o **produto final**. Cada operação diz em que versão entra (`x-since`) e que papéis podem chamá-la (`x-roles`).
 - Convenções fixas: JSON `camelCase`, dinheiro como `Money` em centavos, datas ISO-8601, paginação por cursor, erros RFC 9457 com o código da regra (`rule: RN04`), transições de estado como `POST` em sub-recursos (`/publish`, `/cancel`), `Idempotency-Key` em ações com dinheiro.
 - As rotas já nascem por **produtora** (`/organizations/{id}/…`) e por recurso (`/events/{id}`). Na V2/V3, antes de `Organization` existir (ADR-0003), o id da produtora é derivado do usuário organizador; na V4, a migration cria a produtora com o mesmo id.
-- Escopo deste contrato: o **app do organizador**. O site do participante terá contrato próprio, com as mesmas convenções.
+- Dados de cartão nunca passam pela API da Arclou: o site tokeniza no provedor de pagamento (PCI-DSS).
 - A CI valida o contrato (Redocly lint) em todo PR.
 
 Code-first foi descartado porque o app precisa do contrato agora, quatro versões antes de parte do backend existir. Markdown solto foi descartado porque não gera mock, cliente nem validação.
@@ -34,7 +39,7 @@ Positivas:
 - Erros com `code` e `rule` ligam o que o usuário vê às regras RN do produto.
 
 Negativas / pontos de atenção:
-- O contrato pode envelhecer em relação ao código. Mitigação: na V2, testes de integração validam as respostas contra o `openapi.yaml`.
+- O contrato pode envelhecer em relação ao código. Mitigação: na V2, testes de integração validam as respostas contra os contratos.
 - Mudanças de tela passam a exigir mudança no contrato no mesmo PR.
 - O dev escreve os controllers da V2 seguindo um formato pronto — o aprendizado de **desenho** de API acontece no review das mudanças do contrato, não do zero.
 - Mudança que quebra o app exige ADR e `/v2` na URL.

@@ -306,7 +306,11 @@ Estas regras nasceram do design. **Nenhuma entra na V1.** Cada uma será refinad
 
 ## 6. Decisões em aberto
 
-Nenhuma decisão de produto em aberto no momento. Novas dúvidas que surgirem no design ou na implementação entram aqui antes de virar Issue.
+| Item | Situação | Versão |
+|---|---|---|
+| **Pedido de reembolso pelo participante (RN24)** | A regra e o endpoint existem (`POST /me/orders/{n}/refund-requests`, ver `docs/api/participante.md`), mas não há tela. Falta desenhar o fluxo no site (provável ponto de entrada: PT-C3 e PT-C2). | V5 |
+
+Novas dúvidas que surgirem no design ou na implementação entram aqui antes de virar Issue.
 
 ---
 

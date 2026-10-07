@@ -1,13 +1,20 @@
-# Arclou API — Contrato do app do organizador
+# Arclou API — Contratos
 
-> **Fonte da verdade:** [`openapi.yaml`](openapi.yaml) (OpenAPI 3.1). Este guia explica as convenções e mostra **qual endpoint cada tela usa**.
+| Superfície | Contrato | Guia |
+|---|---|---|
+| App do organizador (mobile) | [`organizer.yaml`](organizer.yaml) | este arquivo |
+| Site do participante (web) | [`participant.yaml`](participant.yaml) | [`participante.md`](participante.md) |
+
+As **convenções** abaixo (dinheiro, datas, paginação, erros, `x-since`) valem para os dois. O restante deste arquivo é o guia do app do organizador.
+
+> **Fonte da verdade:** os arquivos OpenAPI 3.1. Os guias explicam as convenções e mostram **qual endpoint cada tela usa**.
 >
 > Decisão de trabalhar contract-first: [ADR-0004](../adr/0004-contrato-de-api-contract-first.md). Telas e regras: [`produto-e-design.md`](../produto-e-design.md). Campos por versão: [`modelo-de-dominio.md`](../modelo-de-dominio.md).
 
 ## Escopo
 
 - **Dentro:** todo o app mobile do organizador (ADR-0001): acesso, Painel, Eventos, Pedidos, Mais, Perfil, Configurações e Check-in.
-- **Fora:** o site do participante (PT-\*, AC-A\*), que terá um contrato próprio. Os dois compartilham contas (RN34), domínio e erros, mas os recursos e as permissões são diferentes.
+- **Fora:** o site do participante (PT-\*, AC-A\*), em [`participant.yaml`](participant.yaml). Os dois compartilham contas (RN34), autenticação, erros e tipos comuns — o contrato do participante referencia este.
 
 ## Como o contrato evolui por versão
 
@@ -15,7 +22,7 @@ O contrato descreve o **produto final**. O backend o implementa por partes:
 
 | Campo | Significado |
 |---|---|
-| `x-since` | Primeira versão do backend que implementa a operação (V2…V8). Antes disso, o app usa mock gerado do próprio `openapi.yaml`. |
+| `x-since` | Primeira versão do backend que implementa a operação (V2…V8). Antes disso, o app usa mock gerado do próprio contrato. |
 | `x-roles` | Papéis da produtora que podem chamar a operação. Sem `x-roles` = qualquer usuário autenticado (nos próprios dados). |
 
 | Versão | Operações | O que entra |
@@ -149,7 +156,7 @@ O app usa `GET /me` → `memberships[].role` para esconder o que o papel não po
 | AC-B0 Abertura | — |
 | AC-B1 Entrar | `POST /auth/login` · `POST /auth/passkey/options` + `/verify` |
 | AC-B2 Código 2FA | `POST /auth/login/2fa` |
-| AC-B3 Criar conta de organizador | `POST /auth/signup` · `GET /legal/documents/{slug}` |
+| AC-B3 Criar conta de organizador | `POST /auth/signup` (com `organization`) · `GET /legal/documents/{slug}` |
 | AC-B4 Aceitar convite | `GET /invitations/{token}` · `POST …/accept` · `POST …/decline` |
 | AC-B5 Esqueci a senha | `POST /auth/password/forgot` · `POST /auth/password/reset` |
 | AC-B6 Confirmar e-mail | `POST /auth/email/verify` · `POST /auth/email/resend` |
@@ -245,14 +252,15 @@ O app usa `GET /me` → `memberships[].role` para esconder o que o papel não po
 ## Como usar
 
 ```bash
-# Validar o contrato (o mesmo comando roda na CI)
-npx @redocly/cli lint docs/api/openapi.yaml
+# Validar os dois contratos (o mesmo comando roda na CI; lê o redocly.yaml)
+npx @redocly/cli lint
 
 # Ver a documentação navegável
 npx @redocly/cli preview -d docs/api
 
 # App: servidor mock a partir do contrato
-npx @stoplight/prism-cli mock docs/api/openapi.yaml
+npx @redocly/cli bundle organizer -o /tmp/organizer.yaml
+npx @stoplight/prism-cli mock /tmp/organizer.yaml
 ```
 
 Na V2, o backend valida as respostas contra este arquivo nos testes de integração; um endpoint só está pronto quando bate com o contrato.
@@ -260,5 +268,5 @@ Na V2, o backend valida as respostas contra este arquivo nos testes de integraç
 ## Como mudar o contrato
 
 1. A mudança nasce de uma tela nova/alterada (`produto-e-design.md`) ou de uma regra nova.
-2. PR alterando `openapi.yaml` **e** este guia (mapa e tabelas), com o lint verde.
+2. PR alterando o contrato (`organizer.yaml` / `participant.yaml`) **e** o guia correspondente (mapa e tabelas), com o lint verde.
 3. Mudança que quebra o app exige ADR e nova versão da URL.

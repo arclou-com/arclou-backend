@@ -7,6 +7,7 @@ info:
     Contrato **contract-first** (ADR-0004). O app e o backend são construídos a partir deste arquivo.
 
     - Guia de convenções, permissões, erros e mapa tela → endpoint: `docs/api/README.md`.
+    - Site do participante: `docs/api/participant.yaml` (reaproveita autenticação, erros e tipos deste arquivo).
     - Telas e regras: `docs/produto-e-design.md`. Campos por versão: `docs/modelo-de-dominio.md`.
     - `x-since` em cada operação indica a primeira versão do backend que a implementa (V2…V8).
       O contrato descreve o produto final; o backend o implementa por partes, sem mudar formatos.
@@ -165,9 +166,12 @@ paths:
   /auth/signup:
     post:
       tags: [Auth]
-      operationId: signupOrganizer
-      summary: Criar conta de organizador e a produtora (AC-B3, RN34)
-      description: Cria a conta e a produtora, com a pessoa como `OWNER`, e envia o código de confirmação de e-mail (RN32).
+      operationId: signup
+      summary: Criar conta — com produtora no app (AC-B3), só a conta no site (AC-A2) — RN34
+      description: |
+        Com `organization`, cria a conta **e** a produtora, com a pessoa como `OWNER` (app, AC-B3).
+        Sem `organization`, cria só a conta (site do participante, AC-A2).
+        Nos dois casos envia o código de confirmação de e-mail (RN32).
       x-since: V4
       security: []
       requestBody:
@@ -2544,14 +2548,20 @@ components:
         attestationObject: { type: string }
     SignupRequest:
       type: object
-      required: [name, email, password, organizationName, city, acceptTerms]
+      required: [name, email, password, acceptTerms]
       properties:
         name: { type: string, example: Vinicius Pereira }
         email: { type: string, format: email }
         password: { type: string, minLength: 8 }
-        organizationName: { type: string, example: Arclou Produções }
-        city: { type: string, example: 'São Paulo, SP' }
         acceptTerms: { type: boolean, const: true }
+        marketingOptIn: { type: boolean, default: false, description: Novidades por e-mail (opcional — LGPD). }
+        organization:
+          type: object
+          description: Só no app (AC-B3). Ausente = conta sem produtora (site, AC-A2).
+          required: [name, city]
+          properties:
+            name: { type: string, example: Arclou Produções }
+            city: { type: string, example: 'São Paulo, SP' }
     SignupResponse:
       type: object
       required: [verificationToken, emailMasked]
