@@ -138,6 +138,10 @@ Aba **Pedidos** do Tab bar: todos os pedidos da produtora, de todos os eventos. 
 | PD-A4 | Reembolsar (total) | Motivo; impacto: devolução ao comprador, desconto no saldo, ingressos invalidados e devolvidos ao estoque (RN28) | V5 |
 | PD-A4 | Reembolso parcial | Seleção dos ingressos a devolver; pedido continua `CONFIRMED` com os restantes (RN29) | V5 |
 | PD-A5 | Pedido reembolsado | Pedido `CANCELLED`; tickets invalidados; prazo da devolução | V5 |
+| PD-A5 | Reembolso parcial feito | Pedido segue `CONFIRMED`; ticket devolvido aparece cancelado; pagamento mostra total pago, valor reembolsado e o que a produtora recebe (RN29) | V5 |
+| PD-A6 | Reenvios (toast) | "Ingressos reenviados" (pedido confirmado) e "Boleto reenviado" (pedido pendente) | V6 (e-mail) |
+| PD-A7 | Cancelar pedido pendente | Sheet vermelha: boleto deixa de valer, reserva volta para venda, comprador é avisado; nada a devolver | V5 |
+| PD-A8 | Pedido cancelado | `CANCELLED` por ação da produtora; reserva liberada; histórico registra quem cancelou | V5 |
 
 #### 📱 Mais — `MA`
 
