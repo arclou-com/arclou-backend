@@ -69,6 +69,7 @@ As telas usam rótulos em português. O código usa os enums do domínio. A corr
 | `OrderStatus.CONFIRMED` | Confirmado | Sucesso |
 | `OrderStatus.CANCELLED` | Cancelado | Neutro |
 | `TicketStatus.SOLD` | Emitido | Sucesso |
+| Reembolso em andamento / concluído (`Refund`, V5) | Reembolsando / Reembolsado | Atenção / Neutro |
 
 **A partir da V5** (ADR-0002), o ticket passa a ter o ciclo `ISSUED` (Emitido · Sucesso) → `USED` (Utilizado · Neutro) ou `CANCELLED` (Cancelado · Neutro). A V1 mantém `AVAILABLE`/`SOLD`.
 
@@ -119,6 +120,11 @@ Legenda de versão: a coluna **Backend** indica a primeira versão em que a tela
 | EV-D6 | Pausar vendas | Reversível; bloqueia novos pedidos (RN18) | V2 |
 | EV-D7 | Encerrar vendas | Irreversível para vendas; evento segue `PUBLISHED` até acontecer (RN18) | V2 |
 | EV-D8 | Cancelar evento | `CANCELLED` (RN06/RN12); reembolso de todos os pedidos confirmados (RN25); digitar CANCELAR | V2 / reembolso: V5 |
+| EV-E1 | Vendas pausadas | Aviso na página e no detalhe; "Retomar vendas"; quem já comprou não é afetado (RN18) | V2 |
+| EV-E2 | Vendas encerradas | Ninguém mais compra; evento e check-in seguem normalmente (RN18) | V2 |
+| EV-E3 | Evento cancelado | Selo Cancelado; progresso dos reembolsos (pedidos e valor devolvidos); edição desativada (RN25) | V5 |
+| EV-E4 | Cópia criada | "<nome> (cópia)" como rascunho, com descrição, local e tipos copiados, sem vendas e sem data (RN03) | V2 |
+| EV-E5 | Confirmações (toast) | "QR code baixado" e "Relatório gerado" (enviado por e-mail) | V3 |
 
 #### 📱 Pedidos — `PD`
 
