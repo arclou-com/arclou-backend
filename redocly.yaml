@@ -1,0 +1,6 @@
+# Lint do contrato de API (docs/api/openapi.yaml): npx @redocly/cli lint
+extends:
+  - recommended
+rules:
+  info-license: off              # API privada
+  no-server-example.com: off     # servidor localhost de desenvolvimento é intencional

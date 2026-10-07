@@ -22,6 +22,8 @@ O produto final tem duas superfícies ([ADR-0001](docs/adr/0001-superficies-do-p
 
 Todas as telas estão desenhadas no [Figma](https://www.figma.com/design/jFLXJ5S0eonNsXzx5ULmUu/Arclou). O contrato entre o design e o que é desenvolvido aqui — telas, regras de negócio e a versão em que cada uma passa a existir — fica em [`docs/produto-e-design.md`](docs/produto-e-design.md). O que está no Figma precisa bater com esse documento.
 
+O contrato da API do app — que o app e o backend seguem — fica em [`docs/api/`](docs/api/README.md) ([ADR-0004](docs/adr/0004-contrato-de-api-contract-first.md)).
+
 ### Aprendizado
 Usar a mesma base de código para evoluir de fundamentos de Java até engenharia backend moderna.
 
@@ -624,6 +626,7 @@ docs/
 ├── v1-java-core.md
 ├── produto-e-design.md
 ├── modelo-de-dominio.md
+├── api/                # contrato OpenAPI do app (openapi.yaml + guia)
 ├── roadmap/
 ├── architecture/
 ├── adr/

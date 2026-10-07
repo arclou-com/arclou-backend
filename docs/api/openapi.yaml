@@ -1,0 +1,3539 @@
+openapi: 3.1.0
+info:
+  title: Arclou API — App do organizador
+  version: 1.0.0
+  summary: Contrato da API consumida pelo app mobile do organizador (inclui equipe e check-in).
+  description: |
+    Contrato **contract-first** (ADR-0004). O app e o backend são construídos a partir deste arquivo.
+
+    - Guia de convenções, permissões, erros e mapa tela → endpoint: `docs/api/README.md`.
+    - Telas e regras: `docs/produto-e-design.md`. Campos por versão: `docs/modelo-de-dominio.md`.
+    - `x-since` em cada operação indica a primeira versão do backend que a implementa (V2…V8).
+      O contrato descreve o produto final; o backend o implementa por partes, sem mudar formatos.
+    - `x-roles` indica os papéis da produtora que podem chamar a operação
+      (`OWNER`, `ADMIN`, `FINANCE`, `CHECK_IN`). Rotas sem `x-roles` dependem só de estar autenticado.
+  contact:
+    name: Arclou Engineering
+servers:
+  - url: https://api.arclou.com/v1
+    description: Produção
+  - url: http://localhost:8080/v1
+    description: Desenvolvimento local
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth
+    description: Entrar, cadastro, confirmação de e-mail, senha e convites (AC-B*).
+  - name: Me
+    description: Conta, perfil, sessões, 2FA e notificações do usuário (PF-*, CF-B*, PN-B1).
+  - name: Organizations
+    description: Produtora, página pública e configurações (MA-A2, CF-A2, CF-A7).
+  - name: Team
+    description: Membros e convites da produtora (CF-A5).
+  - name: Dashboard
+    description: Painel (PN-A*).
+  - name: Events
+    description: Eventos, ingressos e ações do evento (EV-*).
+  - name: Orders
+    description: Pedidos, reembolsos e reenvios (PD-*).
+  - name: Attendees
+    description: Participantes do evento (EV-C4).
+  - name: Check-in
+    description: Portões, leitura de ingressos, sincronização offline e painel ao vivo (CK-*, EV-C5).
+  - name: Payments
+    description: Saldo, conta bancária e repasses (CF-A4).
+  - name: Integrations
+    description: Webhooks, chaves de API e pixels (CF-A6).
+  - name: Exports
+    description: Exportações assíncronas (CSV/PDF) e QR code.
+  - name: Search
+    description: Busca global (PN-B2, PN-B3).
+  - name: Help
+    description: Central de ajuda, suporte e documentos legais (MA-A3…A8).
+
+paths:
+  # ───────────────────────── Auth ─────────────────────────
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Entrar com e-mail e senha (AC-B1)
+      description: |
+        Se a conta tem 2FA e o aparelho não é confiável, responde `twoFactorRequired` com um `challengeToken`
+        para usar em `/auth/login/2fa`. Após 5 tentativas erradas a conta fica bloqueada por 15 min (RN30);
+        a mensagem de erro nunca diz se o e-mail existe.
+      x-since: V4
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Autenticado ou 2FA exigida.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '401': { $ref: '#/components/responses/InvalidCredentials' }
+        '423': { $ref: '#/components/responses/AccountLocked' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /auth/login/2fa:
+    post:
+      tags: [Auth]
+      operationId: loginTwoFactor
+      summary: Concluir login com código do autenticador ou de recuperação (AC-B2)
+      x-since: V4
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TwoFactorLoginRequest' }
+      responses:
+        '200':
+          description: Autenticado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '401': { $ref: '#/components/responses/InvalidCredentials' }
+  /auth/passkey/options:
+    post:
+      tags: [Auth]
+      operationId: passkeyLoginOptions
+      summary: Opções WebAuthn para entrar com Face ID / passkey (AC-B1)
+      x-since: V4
+      security: []
+      responses:
+        '200':
+          description: Desafio WebAuthn.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PasskeyOptions' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /auth/passkey/verify:
+    post:
+      tags: [Auth]
+      operationId: passkeyLoginVerify
+      summary: Verificar a assinatura da passkey e entrar
+      x-since: V4
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasskeyAssertion' }
+      responses:
+        '200':
+          description: Autenticado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '401': { $ref: '#/components/responses/InvalidCredentials' }
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: refreshTokens
+      summary: Renovar tokens (rotação do refresh token)
+      x-since: V4
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: Novos tokens.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      summary: Sair (encerra a sessão atual)
+      x-since: V4
+      responses:
+        '204': { description: Sessão encerrada. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/signup:
+    post:
+      tags: [Auth]
+      operationId: signupOrganizer
+      summary: Criar conta de organizador e a produtora (AC-B3, RN34)
+      description: Cria a conta e a produtora, com a pessoa como `OWNER`, e envia o código de confirmação de e-mail (RN32).
+      x-since: V4
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SignupRequest' }
+      responses:
+        '201':
+          description: Conta criada; e-mail ainda não confirmado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SignupResponse' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /auth/email/verify:
+    post:
+      tags: [Auth]
+      operationId: verifyEmail
+      summary: Confirmar e-mail com o código de 6 dígitos (AC-B6, RN32)
+      x-since: V4
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [verificationToken, code]
+              properties:
+                verificationToken: { type: string, description: Recebido em `/auth/signup`. }
+                code: { type: string, pattern: '^[0-9]{6}$', example: '482913' }
+      responses:
+        '200':
+          description: E-mail confirmado; usuário autenticado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /auth/email/resend:
+    post:
+      tags: [Auth]
+      operationId: resendEmailCode
+      summary: Reenviar código de confirmação
+      x-since: V4
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [verificationToken]
+              properties:
+                verificationToken: { type: string }
+      responses:
+        '202': { description: Código reenviado (respeitando o intervalo mínimo). }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /auth/password/forgot:
+    post:
+      tags: [Auth]
+      operationId: forgotPassword
+      summary: Pedir link de redefinição de senha (AC-B5, RN31)
+      description: Sempre responde 202, exista ou não a conta.
+      x-since: V4
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '202': { description: 'Se a conta existir, o link (válido por 30 min) foi enviado.' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /auth/password/reset:
+    post:
+      tags: [Auth]
+      operationId: resetPassword
+      summary: Definir nova senha a partir do link (AC-A5, RN31)
+      x-since: V4
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, newPassword]
+              properties:
+                token: { type: string }
+                newPassword: { type: string, minLength: 8 }
+                signOutOtherDevices: { type: boolean, default: true }
+      responses:
+        '204': { description: Senha alterada. }
+        '410': { $ref: '#/components/responses/Gone' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /invitations/{invitationToken}:
+    parameters:
+      - name: invitationToken
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Auth]
+      operationId: getInvitation
+      summary: Ver convite de equipe (AC-B4, RN33)
+      x-since: V4
+      security: []
+      responses:
+        '200':
+          description: Convite válido.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvitationPreview' }
+        '410': { $ref: '#/components/responses/Gone' }
+  /invitations/{invitationToken}/accept:
+    parameters:
+      - name: invitationToken
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Auth]
+      operationId: acceptInvitation
+      summary: Aceitar convite (cria a conta se necessário) e entrar
+      x-since: V4
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, password]
+              properties:
+                name: { type: string, example: Júlia Rocha }
+                password: { type: string, minLength: 8 }
+      responses:
+        '200':
+          description: Membro ativo; autenticado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '410': { $ref: '#/components/responses/Gone' }
+  /invitations/{invitationToken}/decline:
+    parameters:
+      - name: invitationToken
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Auth]
+      operationId: declineInvitation
+      summary: Recusar convite
+      x-since: V4
+      security: []
+      responses:
+        '204': { description: Convite recusado. }
+        '410': { $ref: '#/components/responses/Gone' }
+
+  # ───────────────────────── Me ─────────────────────────
+  /me:
+    get:
+      tags: [Me]
+      operationId: getMe
+      summary: Conta atual e produtoras de que é membro (PF-A1)
+      x-since: V2
+      responses:
+        '200':
+          description: Conta.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Me' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    patch:
+      tags: [Me]
+      operationId: updateMe
+      summary: Atualizar dados pessoais (PF-A2)
+      x-since: V2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MeUpdate' }
+      responses:
+        '200':
+          description: Atualizado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Me' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /me/photo:
+    put:
+      tags: [Me]
+      operationId: uploadMyPhoto
+      summary: Enviar foto de perfil já recortada (PF-A3)
+      x-since: V3
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary, description: 'JPG, PNG ou HEIC; recorte circular feito no app.' }
+      responses:
+        '200':
+          description: Foto atualizada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Me' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+    delete:
+      tags: [Me]
+      operationId: deleteMyPhoto
+      summary: Remover foto de perfil
+      x-since: V3
+      responses:
+        '204': { description: Foto removida. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/password:
+    put:
+      tags: [Me]
+      operationId: changePassword
+      summary: Alterar senha (CF-B1)
+      x-since: V4
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: { type: string }
+                newPassword: { type: string, minLength: 8 }
+                signOutOtherDevices: { type: boolean, default: true }
+      responses:
+        '204': { description: Senha alterada. }
+        '401': { $ref: '#/components/responses/InvalidCredentials' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /me/sessions:
+    get:
+      tags: [Me]
+      operationId: listMySessions
+      summary: Aparelhos conectados (CF-A7)
+      x-since: V4
+      responses:
+        '200':
+          description: Sessões ativas.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Session' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    delete:
+      tags: [Me]
+      operationId: endOtherSessions
+      summary: Encerrar todas as outras sessões
+      x-since: V4
+      responses:
+        '204': { description: Sessões encerradas. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/sessions/{sessionId}:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    delete:
+      tags: [Me]
+      operationId: endSession
+      summary: Encerrar uma sessão
+      x-since: V4
+      responses:
+        '204': { description: Sessão encerrada. }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /me/2fa/setup:
+    post:
+      tags: [Me]
+      operationId: startTwoFactorSetup
+      summary: Iniciar ativação do 2FA (CF-B2)
+      description: Retorna a chave e a URI `otpauth://` para abrir direto no app autenticador (no celular) ou mostrar QR.
+      x-since: V4
+      responses:
+        '200':
+          description: Chave gerada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TwoFactorSetup' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/2fa/activate:
+    post:
+      tags: [Me]
+      operationId: activateTwoFactor
+      summary: Confirmar código e ativar o 2FA (CF-B2 → CF-B3)
+      x-since: V4
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, pattern: '^[0-9]{6}$' }
+      responses:
+        '200':
+          description: 2FA ativo; códigos de recuperação exibidos uma única vez.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecoveryCodes' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /me/2fa:
+    delete:
+      tags: [Me]
+      operationId: disableTwoFactor
+      summary: Desativar o 2FA (CF-B4) — exige senha
+      x-since: V4
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string }
+      responses:
+        '204': { description: 2FA desativado. }
+        '401': { $ref: '#/components/responses/InvalidCredentials' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /me/2fa/recovery-codes:
+    get:
+      tags: [Me]
+      operationId: getRecoveryCodesStatus
+      summary: Quantos códigos de recuperação restam (CF-A7)
+      x-since: V4
+      responses:
+        '200':
+          description: Situação.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [remaining, total]
+                properties:
+                  remaining: { type: integer, example: 8 }
+                  total: { type: integer, example: 10 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Me]
+      operationId: regenerateRecoveryCodes
+      summary: Gerar novos códigos (invalida os anteriores)
+      x-since: V4
+      responses:
+        '200':
+          description: Novos códigos.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecoveryCodes' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/passkeys:
+    get:
+      tags: [Me]
+      operationId: listPasskeys
+      summary: Passkeys cadastradas (CF-A7)
+      x-since: V4
+      responses:
+        '200':
+          description: Passkeys.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Passkey' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Me]
+      operationId: registerPasskey
+      summary: Registrar passkey deste aparelho
+      x-since: V4
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasskeyAssertion' }
+      responses:
+        '201':
+          description: Passkey registrada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Passkey' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/passkeys/{passkeyId}:
+    parameters:
+      - name: passkeyId
+        in: path
+        required: true
+        schema: { type: string }
+    delete:
+      tags: [Me]
+      operationId: deletePasskey
+      summary: Remover passkey
+      x-since: V4
+      responses:
+        '204': { description: Removida. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/deletion-eligibility:
+    get:
+      tags: [Me]
+      operationId: getDeletionEligibility
+      summary: Verificar se a conta pode ser excluída (PF-A4, RN27)
+      x-since: V4
+      responses:
+        '200':
+          description: Pendências que impedem a exclusão (lista vazia = pode excluir).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeletionEligibility' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/deletion:
+    post:
+      tags: [Me]
+      operationId: requestAccountDeletion
+      summary: Excluir conta (dados pessoais apagados em até 30 dias)
+      x-since: V4
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password, confirmation]
+              properties:
+                password: { type: string }
+                confirmation: { type: string, const: EXCLUIR }
+      responses:
+        '202': { description: Exclusão agendada; todas as sessões encerradas. }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+  /me/notifications:
+    get:
+      tags: [Me]
+      operationId: listNotifications
+      summary: Notificações (PN-B1)
+      x-since: V6
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Lista paginada, mais recentes primeiro.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Notification' }
+                      meta:
+                        type: object
+                        properties:
+                          unreadCount: { type: integer, example: 3 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/notifications/read-all:
+    post:
+      tags: [Me]
+      operationId: markAllNotificationsRead
+      summary: Marcar todas como lidas
+      x-since: V6
+      responses:
+        '204': { description: Marcadas. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/notifications/{notificationId}/read:
+    parameters:
+      - name: notificationId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Me]
+      operationId: markNotificationRead
+      summary: Marcar uma notificação como lida (ao abrir)
+      x-since: V6
+      responses:
+        '204': { description: Marcada. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/notification-preferences:
+    get:
+      tags: [Me]
+      operationId: getNotificationPreferences
+      summary: Preferências de notificação (CF-A3)
+      x-since: V6
+      responses:
+        '200':
+          description: Preferências.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationPreferences' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [Me]
+      operationId: updateNotificationPreferences
+      summary: Atualizar preferências (salvamento automático no app)
+      x-since: V6
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NotificationPreferences' }
+      responses:
+        '200':
+          description: Atualizadas.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationPreferences' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/devices:
+    post:
+      tags: [Me]
+      operationId: registerPushDevice
+      summary: Registrar token de push deste aparelho
+      x-since: V6
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [platform, pushToken]
+              properties:
+                platform: { type: string, enum: [IOS, ANDROID] }
+                pushToken: { type: string }
+                deviceName: { type: string, example: iPhone 15 Pro }
+      responses:
+        '204': { description: Registrado. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ───────────────────────── Organizations ─────────────────────────
+  /organizations/{organizationId}:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    get:
+      tags: [Organizations]
+      operationId: getOrganization
+      summary: Produtora, página pública e configurações (MA-A2, CF-A2)
+      x-since: V4
+      responses:
+        '200':
+          description: Produtora.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Organization' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Organizations]
+      operationId: updateOrganization
+      summary: Atualizar página pública, configurações gerais ou regras de segurança
+      description: Campos da página pública (MA-A2), `settings` (CF-A2) e `security` (CF-A7, só `OWNER`).
+      x-since: V4
+      x-roles: [OWNER, ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrganizationUpdate' }
+      responses:
+        '200':
+          description: Atualizada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Organization' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /organizations/{organizationId}/images/{kind}:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+      - name: kind
+        in: path
+        required: true
+        schema: { type: string, enum: [logo, cover] }
+    put:
+      tags: [Organizations]
+      operationId: uploadOrganizationImage
+      summary: Enviar logo (≥ 400×400) ou capa (≥ 1600×400) da página pública
+      x-since: V4
+      x-roles: [OWNER, ADMIN]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '200':
+          description: Imagem atualizada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Organization' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /organizations/{organizationId}/activity:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    get:
+      tags: [Organizations]
+      operationId: listOrganizationActivity
+      summary: Atividade recente de segurança (CF-A7)
+      x-since: V4
+      x-roles: [OWNER, ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Eventos de auditoria.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/ActivityEntry' }
+
+  # ───────────────────────── Team ─────────────────────────
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /organizations/{organizationId}/members:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    get:
+      tags: [Team]
+      operationId: listMembers
+      summary: Membros e convites pendentes (CF-A5)
+      x-since: V4
+      responses:
+        '200':
+          description: Equipe.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Member' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /organizations/{organizationId}/invitations:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    post:
+      tags: [Team]
+      operationId: inviteMember
+      summary: Convidar pessoa para a equipe (RN33 — expira em 7 dias)
+      x-since: V4
+      x-roles: [OWNER, ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, role]
+              properties:
+                email: { type: string, format: email, example: julia.rocha@gmail.com }
+                role: { $ref: '#/components/schemas/MemberRole' }
+      responses:
+        '201':
+          description: Convite enviado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Member' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /organizations/{organizationId}/invitations/{memberId}/resend:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+      - $ref: '#/components/parameters/MemberId'
+    post:
+      tags: [Team]
+      operationId: resendInvitation
+      summary: Reenviar convite (renova os 7 dias)
+      x-since: V4
+      x-roles: [OWNER, ADMIN]
+      responses:
+        '204': { description: Reenviado. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /organizations/{organizationId}/members/{memberId}:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+      - $ref: '#/components/parameters/MemberId'
+    patch:
+      tags: [Team]
+      operationId: updateMemberRole
+      summary: Mudar papel de um membro
+      description: Só `OWNER` promove alguém a `OWNER` (transferência de propriedade; deve haver exatamente um).
+      x-since: V4
+      x-roles: [OWNER, ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role: { $ref: '#/components/schemas/MemberRole' }
+      responses:
+        '200':
+          description: Atualizado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Member' }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+    delete:
+      tags: [Team]
+      operationId: removeMember
+      summary: Remover membro ou cancelar convite
+      x-since: V4
+      x-roles: [OWNER, ADMIN]
+      responses:
+        '204': { description: Removido. }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+
+  # ───────────────────────── Dashboard ─────────────────────────
+  /organizations/{organizationId}/dashboard:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    get:
+      tags: [Dashboard]
+      operationId: getDashboard
+      summary: Painel (PN-A1…A4)
+      description: |
+        Uma única chamada monta o Painel em qualquer estágio: primeiro acesso (onboarding), evento recém-publicado
+        ou painel com dados. `conversionRate` é `null` até a V8.
+      x-since: V3
+      x-roles: [OWNER, ADMIN, FINANCE]
+      parameters:
+        - name: period
+          in: query
+          schema: { type: string, enum: [7d, 30d, 90d], default: 30d }
+      responses:
+        '200':
+          description: Painel.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Dashboard' }
+
+  # ───────────────────────── Events ─────────────────────────
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /organizations/{organizationId}/events:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    get:
+      tags: [Events]
+      operationId: listEvents
+      summary: Lista de eventos com abas, busca, filtros e ordenação (EV-A1, A5–A8)
+      x-since: V2
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/EventStatus' }
+        - name: q
+          in: query
+          description: Busca por nome ou cidade (EV-A5).
+          schema: { type: string }
+        - name: period
+          in: query
+          schema: { type: string, enum: [ANY, NEXT_30_DAYS, NEXT_3_MONTHS, CUSTOM], default: ANY }
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+        - name: format
+          in: query
+          style: form
+          explode: false
+          schema:
+            type: array
+            items: { $ref: '#/components/schemas/EventFormat' }
+        - name: city
+          in: query
+          schema: { type: string }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [STARTS_AT, CREATED_AT, NAME, BEST_SELLING], default: STARTS_AT }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Eventos e contagem por status (para as abas).
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/EventSummary' }
+                      meta:
+                        type: object
+                        properties:
+                          counts: { $ref: '#/components/schemas/EventStatusCounts' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Events]
+      operationId: createEvent
+      summary: Criar evento (nasce como DRAFT — RN03) (EV-B1/B3)
+      x-since: V2
+      x-roles: [OWNER, ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EventCreate' }
+      responses:
+        '201':
+          description: Rascunho criado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Event' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /events/{eventId}:
+    parameters:
+      - $ref: '#/components/parameters/EventId'
+    get:
+      tags: [Events]
+      operationId: getEvent
+      summary: Detalhe do evento (EV-C1, EV-B3…B8, EV-E1…E3)
+      x-since: V2
+      responses:
+        '200':
+          description: Evento completo, com tipos de ingresso.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Event' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Events]
+      operationId: updateEvent
+      summary: Atualizar dados do evento (etapas 1 e 2 do formulário)
+      description: Rascunho aceita campos incompletos. Evento publicado não volta a rascunho.
+      x-since: V2
+      x-roles: [OWNER, ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EventUpdate' }
+      responses:
+        '200':
+          description: Atualizado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Event' }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Events]
+      operationId: deleteDraftEvent
+      summary: Excluir rascunho (EV-A3, RN16)
+      x-since: V2
+      x-roles: [OWNER, ADMIN]
+      responses:
+        '204': { description: Rascunho excluído. }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+  /events/{eventId}/cover:
+    parameters:
+      - $ref: '#/components/parameters/EventId'
+    put:
+      tags: [Events]
+      operationId: uploadEventCover
+      summary: Enviar capa do evento (EV-B3)
+      x-since: V3
+      x-roles: [OWNER, ADMIN]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '200':
+          description: Capa atualizada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Event' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /events/{eventId}/overview:
+    parameters:
+      - $ref: '#/components/parameters/EventId'
+    get:
+      tags: [Events]
+      operationId: getEventOverview
+      summary: Visão geral do evento (EV-C1)
+      x-since: V3
+      x-roles: [OWNER, ADMIN, FINANCE]
+      parameters:
+        - name: period
+          in: query
+          schema: { type: string, enum: [7d, 30d, ALL], default: 30d }
+      responses:
+        '200':
+          description: KPIs, alertas, vendas por dia e pedidos recentes.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EventOverview' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /events/{eventId}/publish:
+    parameters:
+      - $ref: '#/components/parameters/EventId'
+    post:
+      tags: [Events]
+      operationId: publishEvent
+      summary: Publicar evento agora ou agendar (EV-B8/B9, RN04)
+      x-since: V2
+      x-roles: [OWNER, ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                publishAt:
+                  type: [string, 'null']
+                  format: date-time
+                  description: Vazio = publicar agora.
+                visibility: { type: string, enum: [PUBLIC, UNLISTED], default: PUBLIC }
+      responses:
+        '200':
+          description: Publicado (ou agendado).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Event' }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+  /events/{eventId}/sales/pause:
+    parameters:
+      - $ref: '#/components/parameters/EventId'
+    post:
+      tags: [Events]
+      operationId: pauseSales
+      summary: Pausar vendas (EV-D6 → EV-E1, RN18)
+      x-since: V2
+      x-roles: [OWNER, ADMIN]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                publicNotice: { type: string, maxLength: 140, example: Ajustando os lotes — voltamos já. }
+                notifyWaitlistOnResume: { type: boolean, default: true }
+      responses:
+        '200':
+          description: Vendas pausadas.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Event' }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+  /events/{eventId}/sales/resume:
+    parameters:
+      - $ref: '#/components/parameters/EventId'
+    post:
+      tags: [Events]
+      operationId: resumeSales
+      summary: Retomar vendas (EV-E1)
+      x-since: V2
+      x-roles: [OWNER, ADMIN]
+      responses:
+        '200':
+          description: Vendas retomadas.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Event' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /events/{eventId}/sales/close:
+    parameters:
+      - $ref: '#/components/parameters/EventId'
+    post:
+      tags: [Events]
+      operationId: closeSales
+      summary: Encerrar vendas definitivamente (EV-D7 → EV-E2, RN18)
+      x-since: V2
+      x-roles: [OWNER, ADMIN]
+      responses:
+        '200':
+          description: Vendas encerradas; evento segue PUBLISHED.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Event' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /events/{eventId}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/EventId'
+    post:
+      tags: [Events]
+      operationId: cancelEvent
+      summary: Cancelar evento e reembolsar pedidos (EV-D8 → EV-E3, RN06, RN25)
+      x-since: V2
+      x-roles: [OWNER, ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason, confirmation]
+              properties:
+                reason: { type: string, enum: [VENUE, LOW_DEMAND, ORGANIZER, FORCE_MAJEURE, OTHER] }
+                messageToAttendees: { type: string, maxLength: 1000 }
+                confirmation: { type: string, const: CANCELAR }
+      responses:
+        '200':
+          description: Evento CANCELLED; reembolsos iniciados (assíncronos a partir da V5/V6).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Event' }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+  /events/{eventId}/duplicate:
+    parameters:
+      - $ref: '#/components/parameters/EventId'
+    post:
+      tags: [Events]
+      operationId: duplicateEvent
+      summary: Duplicar como rascunho (EV-D3 → EV-E4, RN03)
+      x-since: V2
+      x-roles: [OWNER, ADMIN]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                copyTicketTypes: { type: boolean, default: true }
+                copyCover: { type: boolean, default: true }
+      responses:
+        '201':
+          description: Cópia criada como DRAFT, sem data e sem vendas.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Event' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /events/{eventId}/qr-code:
+    parameters:
+      - $ref: '#/components/parameters/EventId'
+    get:
+      tags: [Exports]
+      operationId: getEventQrCode
+      summary: QR code da página pública do evento (EV-D4)
+      description: Não é ingresso — aponta para `/e/<slug>`.
+      x-since: V2
+      parameters:
+        - name: format
+          in: query
+          schema: { type: string, enum: [png, svg, pdf], default: png }
+        - name: size
+          in: query
+          schema: { type: integer, enum: [600, 1200, 2400], default: 1200 }
+        - name: includeDetails
+          in: query
+          description: Inclui nome e data abaixo do QR.
+          schema: { type: boolean, default: true }
+      responses:
+        '200':
+          description: Arquivo do QR code.
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+            image/svg+xml:
+              schema: { type: string }
+            application/pdf:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /events/{eventId}/ticket-types:
+    parameters:
+      - $ref: '#/components/parameters/EventId'
+    get:
+      tags: [Events]
+      operationId: listTicketTypes
+      summary: Tipos de ingresso (EV-B7, EV-C2)
+      x-since: V2
+      responses:
+        '200':
+          description: Tipos.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/TicketType' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Events]
+      operationId: createTicketType
+      summary: Criar tipo de ingresso / lote (RN07, RN08, RN40)
+      x-since: V2
+      x-roles: [OWNER, ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TicketTypeInput' }
+      responses:
+        '201':
+          description: Criado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TicketType' }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /ticket-types/{ticketTypeId}:
+    parameters:
+      - $ref: '#/components/parameters/TicketTypeId'
+    patch:
+      tags: [Events]
+      operationId: updateTicketType
+      summary: Editar tipo de ingresso
+      description: Quantidade não pode ficar abaixo do que já foi vendido (RN09).
+      x-since: V2
+      x-roles: [OWNER, ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TicketTypeInput' }
+      responses:
+        '200':
+          description: Atualizado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TicketType' }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Events]
+      operationId: deleteTicketType
+      summary: Remover tipo sem vendas
+      x-since: V2
+      x-roles: [OWNER, ADMIN]
+      responses:
+        '204': { description: Removido. }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+  /events/{eventId}/reports:
+    parameters:
+      - $ref: '#/components/parameters/EventId'
+    post:
+      tags: [Exports]
+      operationId: createEventReport
+      summary: Gerar relatório do evento (EV-D5 → EV-E5)
+      x-since: V3
+      x-roles: [OWNER, ADMIN, FINANCE]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [format, sections]
+              properties:
+                format: { type: string, enum: [CSV, PDF] }
+                sections:
+                  type: array
+                  items: { type: string, enum: [SALES, ORDERS, ATTENDEES, CHECK_IN, PAYOUTS] }
+      responses:
+        '202':
+          description: Exportação enfileirada; arquivo enviado por e-mail.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExportJob' }
+
+  # ───────────────────────── Attendees ─────────────────────────
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /events/{eventId}/attendees:
+    parameters:
+      - $ref: '#/components/parameters/EventId'
+    get:
+      tags: [Attendees]
+      operationId: listAttendees
+      summary: Participantes (titulares dos ingressos) (EV-C4)
+      x-since: V3
+      x-roles: [OWNER, ADMIN, FINANCE]
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: ticketTypeId
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Participantes.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Attendee' }
+
+  # ───────────────────────── Orders ─────────────────────────
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /organizations/{organizationId}/orders:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    get:
+      tags: [Orders]
+      operationId: listOrders
+      summary: Pedidos da produtora com abas, evento, filtros e busca (PD-A1, PD-B1…B3, EV-C3)
+      x-since: V2
+      x-roles: [OWNER, ADMIN, FINANCE]
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/OrderStatus' }
+        - name: eventId
+          in: query
+          schema: { type: string }
+        - name: q
+          in: query
+          description: Nome, e-mail ou número do pedido.
+          schema: { type: string }
+        - name: period
+          in: query
+          schema: { type: string, enum: [TODAY, LAST_7_DAYS, LAST_30_DAYS, CUSTOM, ANY], default: ANY }
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+        - name: paymentMethod
+          in: query
+          style: form
+          explode: false
+          schema:
+            type: array
+            items: { $ref: '#/components/schemas/PaymentMethod' }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [NEWEST, HIGHEST_VALUE, NAME], default: NEWEST }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Pedidos, contagens por status e pendentes há mais de 24 h (alerta).
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/OrderSummary' }
+                      meta:
+                        type: object
+                        properties:
+                          counts: { $ref: '#/components/schemas/OrderStatusCounts' }
+                          pendingOver24h: { type: integer, example: 14 }
+                          totalMatching: { type: integer, example: 41 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /orders/{orderId}:
+    parameters:
+      - $ref: '#/components/parameters/OrderId'
+    get:
+      tags: [Orders]
+      operationId: getOrder
+      summary: Detalhe do pedido (PD-A2, A3, A5, A8)
+      x-since: V2
+      x-roles: [OWNER, ADMIN, FINANCE]
+      responses:
+        '200':
+          description: Pedido completo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /orders/{orderId}/resend-tickets:
+    parameters:
+      - $ref: '#/components/parameters/OrderId'
+    post:
+      tags: [Orders]
+      operationId: resendTickets
+      summary: Reenviar ingressos por e-mail (PD-A6)
+      x-since: V6
+      x-roles: [OWNER, ADMIN]
+      responses:
+        '202': { description: Reenvio enfileirado. }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+  /orders/{orderId}/resend-payment:
+    parameters:
+      - $ref: '#/components/parameters/OrderId'
+    post:
+      tags: [Orders]
+      operationId: resendPaymentLink
+      summary: Reenviar boleto / link de pagamento de pedido pendente (PD-A3, PD-A6)
+      x-since: V5
+      x-roles: [OWNER, ADMIN]
+      responses:
+        '202': { description: Reenvio enfileirado. }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+  /orders/{orderId}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/OrderId'
+    post:
+      tags: [Orders]
+      operationId: cancelPendingOrder
+      summary: Cancelar pedido pendente (PD-A7 → PD-A8)
+      description: Só PENDING. Libera a reserva e invalida o boleto/Pix. Pedido pago usa reembolso.
+      x-since: V5
+      x-roles: [OWNER, ADMIN]
+      responses:
+        '200':
+          description: Pedido CANCELLED.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+  /orders/{orderId}/refunds:
+    parameters:
+      - $ref: '#/components/parameters/OrderId'
+    post:
+      tags: [Orders]
+      operationId: refundOrder
+      summary: Reembolso total ou parcial (PD-A4 → PD-A5, RN28, RN29)
+      x-since: V5
+      x-roles: [OWNER, ADMIN, FINANCE]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefundRequest' }
+      responses:
+        '201':
+          description: Reembolso criado; pedido atualizado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RefundResult' }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /orders/{orderId}/refunds/preview:
+    parameters:
+      - $ref: '#/components/parameters/OrderId'
+    post:
+      tags: [Orders]
+      operationId: previewRefund
+      summary: Simular valores do reembolso antes de confirmar (bloco "O que acontece")
+      x-since: V5
+      x-roles: [OWNER, ADMIN, FINANCE]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefundRequest' }
+      responses:
+        '200':
+          description: Valores calculados pelo sistema (RN10).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RefundPreview' }
+
+  # ───────────────────────── Check-in ─────────────────────────
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/check-in/events:
+    get:
+      tags: [Check-in]
+      operationId: listMyCheckInEvents
+      summary: Eventos em que posso fazer check-in hoje e próximos (CK-A1)
+      x-since: V5
+      responses:
+        '200':
+          description: Eventos com estado do check-in e portões.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/CheckInEvent' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /events/{eventId}/check-in/settings:
+    parameters:
+      - $ref: '#/components/parameters/EventId'
+    get:
+      tags: [Check-in]
+      operationId: getCheckInSettings
+      summary: Abertura, portões e regras de validação (EV-C5)
+      x-since: V5
+      x-roles: [OWNER, ADMIN]
+      responses:
+        '200':
+          description: Configuração.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CheckInSettings' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [Check-in]
+      operationId: updateCheckInSettings
+      summary: Atualizar abertura do check-in, portões e regras
+      description: '`blockReentry` é sempre `true` (RN36) e não pode ser alterado.'
+      x-since: V5
+      x-roles: [OWNER, ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CheckInSettings' }
+      responses:
+        '200':
+          description: Atualizada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CheckInSettings' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /events/{eventId}/check-in/snapshot:
+    parameters:
+      - $ref: '#/components/parameters/EventId'
+    get:
+      tags: [Check-in]
+      operationId: getCheckInSnapshot
+      summary: Lista de ingressos para validar sem internet (CK-A1, CK-A8, RN37)
+      description: Suporta `If-None-Match`; use `since` para baixar só o que mudou.
+      x-since: V7
+      x-roles: [OWNER, ADMIN, CHECK_IN]
+      parameters:
+        - name: since
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Snapshot.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CheckInSnapshot' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '304': { description: Sem mudanças. }
+  /events/{eventId}/check-in/scans:
+    parameters:
+      - $ref: '#/components/parameters/EventId'
+    post:
+      tags: [Check-in]
+      operationId: scanTicket
+      summary: Validar ingresso por QR ou manualmente (CK-A2…A6, RN35, RN36, RN39)
+      description: |
+        Resultado `REQUIRES_DOCUMENT` (RN38/RN41) deixa a leitura pendente: confirme em
+        `/check-in/scans/{scanId}/decision`. Leituras são idempotentes por `clientScanId`.
+      x-since: V5
+      x-roles: [OWNER, ADMIN, CHECK_IN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ScanRequest' }
+      responses:
+        '200':
+          description: Resultado da leitura (aceita ou recusada — recusa não é erro HTTP).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScanResult' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /check-in/scans/{scanId}/decision:
+    parameters:
+      - name: scanId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Check-in]
+      operationId: decideDocumentScan
+      summary: Liberar ou recusar após conferir o documento (CK-A3 carteirinha)
+      x-since: V5
+      x-roles: [OWNER, ADMIN, CHECK_IN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [ACCEPT, REJECT] }
+      responses:
+        '200':
+          description: ACCEPT → ticket USED; REJECT → ticket inalterado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScanResult' }
+        '409': { $ref: '#/components/responses/RuleViolation' }
+  /events/{eventId}/check-in/scans/batch:
+    parameters:
+      - $ref: '#/components/parameters/EventId'
+    post:
+      tags: [Check-in]
+      operationId: syncOfflineScans
+      summary: Enviar leituras feitas sem internet (CK-A8, RN37)
+      description: Em conflito (mesmo ingresso em dois aparelhos), vale a leitura mais antiga; as outras viram ocorrência.
+      x-since: V7
+      x-roles: [OWNER, ADMIN, CHECK_IN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scans]
+              properties:
+                scans:
+                  type: array
+                  maxItems: 500
+                  items: { $ref: '#/components/schemas/ScanRequest' }
+      responses:
+        '200':
+          description: Resultado por leitura.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results]
+                properties:
+                  results:
+                    type: array
+                    items: { $ref: '#/components/schemas/ScanResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /events/{eventId}/check-in/tickets:
+    parameters:
+      - $ref: '#/components/parameters/EventId'
+    get:
+      tags: [Check-in]
+      operationId: searchTicketsForCheckIn
+      summary: Busca manual por nome, e-mail ou nº do ingresso (CK-A6)
+      x-since: V5
+      x-roles: [OWNER, ADMIN, CHECK_IN]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2 }
+      responses:
+        '200':
+          description: Pedidos e ingressos encontrados, com estado de uso.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/CheckInOrderMatch' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /events/{eventId}/check-in/live:
+    parameters:
+      - $ref: '#/components/parameters/EventId'
+    get:
+      tags: [Check-in]
+      operationId: getLiveCheckIn
+      summary: Painel ao vivo do dia do evento (CK-A7)
+      description: Atualizar por polling (10 s). Push/stream fica para a V6+.
+      x-since: V5
+      x-roles: [OWNER, ADMIN]
+      responses:
+        '200':
+          description: Presentes por tipo e portão, equipe e ocorrências.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LiveCheckIn' }
+
+  # ───────────────────────── Payments ─────────────────────────
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /organizations/{organizationId}/balance:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    get:
+      tags: [Payments]
+      operationId: getBalance
+      summary: Saldo disponível, a liberar e próximo repasse (CF-A4)
+      x-since: V5
+      x-roles: [OWNER, FINANCE]
+      responses:
+        '200':
+          description: Saldo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Balance' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /organizations/{organizationId}/bank-account:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    get:
+      tags: [Payments]
+      operationId: getBankAccount
+      summary: Dados de recebimento
+      x-since: V5
+      x-roles: [OWNER, FINANCE]
+      responses:
+        '200':
+          description: Conta (dados sensíveis mascarados).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankAccount' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [Payments]
+      operationId: updateBankAccount
+      summary: Salvar dados bancários (salvamento explícito; exige senha se a regra estiver ativa)
+      x-since: V5
+      x-roles: [OWNER]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BankAccountInput' }
+      responses:
+        '200':
+          description: Conta salva (volta para verificação).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankAccount' }
+        '401': { $ref: '#/components/responses/InvalidCredentials' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /organizations/{organizationId}/payout-settings:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    put:
+      tags: [Payments]
+      operationId: updatePayoutSettings
+      summary: Frequência e repasse automático
+      x-since: V5
+      x-roles: [OWNER, FINANCE]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PayoutSettings' }
+      responses:
+        '200':
+          description: Atualizado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PayoutSettings' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /organizations/{organizationId}/payouts:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    get:
+      tags: [Payments]
+      operationId: listPayouts
+      summary: Histórico de repasses
+      x-since: V5
+      x-roles: [OWNER, FINANCE]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Repasses.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Payout' }
+
+  # ───────────────────────── Integrations ─────────────────────────
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /organizations/{organizationId}/webhooks:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    get:
+      tags: [Integrations]
+      operationId: listWebhooks
+      summary: Webhooks (CF-A6)
+      x-since: V6
+      x-roles: [OWNER, ADMIN]
+      responses:
+        '200':
+          description: Webhooks.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Webhook' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Integrations]
+      operationId: createWebhook
+      summary: Adicionar webhook
+      x-since: V6
+      x-roles: [OWNER, ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WebhookInput' }
+      responses:
+        '201':
+          description: Criado (o segredo de assinatura é exibido só agora).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebhookCreated' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /organizations/{organizationId}/webhooks/{webhookId}:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+      - name: webhookId
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      tags: [Integrations]
+      operationId: updateWebhook
+      summary: Editar webhook
+      x-since: V6
+      x-roles: [OWNER, ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WebhookInput' }
+      responses:
+        '200':
+          description: Atualizado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Webhook' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    delete:
+      tags: [Integrations]
+      operationId: deleteWebhook
+      summary: Remover webhook
+      x-since: V6
+      x-roles: [OWNER, ADMIN]
+      responses:
+        '204': { description: Removido. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /organizations/{organizationId}/webhooks/{webhookId}/test:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+      - name: webhookId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Integrations]
+      operationId: testWebhook
+      summary: Enviar evento de teste
+      x-since: V6
+      x-roles: [OWNER, ADMIN]
+      responses:
+        '202': { description: Teste enviado. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /organizations/{organizationId}/api-keys:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    get:
+      tags: [Integrations]
+      operationId: listApiKeys
+      summary: Chaves de API (mascaradas)
+      x-since: V4
+      x-roles: [OWNER, ADMIN]
+      responses:
+        '200':
+          description: Chaves.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/ApiKey' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Integrations]
+      operationId: createApiKey
+      summary: Gerar chave de API (exibida uma única vez)
+      x-since: V4
+      x-roles: [OWNER]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [environment]
+              properties:
+                environment: { type: string, enum: [LIVE, TEST] }
+                name: { type: string }
+      responses:
+        '201':
+          description: Chave criada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiKeyCreated' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /organizations/{organizationId}/api-keys/{apiKeyId}:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+      - name: apiKeyId
+        in: path
+        required: true
+        schema: { type: string }
+    delete:
+      tags: [Integrations]
+      operationId: revokeApiKey
+      summary: Revogar chave
+      x-since: V4
+      x-roles: [OWNER]
+      responses:
+        '204': { description: Revogada. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /organizations/{organizationId}/pixels:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    get:
+      tags: [Integrations]
+      operationId: listPixels
+      summary: Pixels de marketing da página pública
+      x-since: V6
+      x-roles: [OWNER, ADMIN]
+      responses:
+        '200':
+          description: Pixels.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Pixel' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [Integrations]
+      operationId: upsertPixel
+      summary: Conectar ou atualizar pixel
+      x-since: V6
+      x-roles: [OWNER, ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Pixel' }
+      responses:
+        '200':
+          description: Salvo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Pixel' }
+
+  # ───────────────────────── Exports ─────────────────────────
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /organizations/{organizationId}/exports:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    post:
+      tags: [Exports]
+      operationId: createExport
+      summary: Exportar lista de eventos, pedidos ou participantes (EV-A7, PD-B4)
+      description: Usa os mesmos filtros das listas. Exportações com dados pessoais são registradas (LGPD).
+      x-since: V3
+      x-roles: [OWNER, ADMIN, FINANCE]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExportRequest' }
+      responses:
+        '202':
+          description: Enfileirada; o arquivo vai por e-mail.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExportJob' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /exports/{exportId}:
+    parameters:
+      - name: exportId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Exports]
+      operationId: getExport
+      summary: Situação da exportação
+      x-since: V3
+      responses:
+        '200':
+          description: Exportação.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExportJob' }
+
+  # ───────────────────────── Search ─────────────────────────
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /organizations/{organizationId}/search:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    get:
+      tags: [Search]
+      operationId: globalSearch
+      summary: Busca global (PN-B3)
+      description: Buscas recentes (PN-B2) ficam guardadas no aparelho; não há endpoint.
+      x-since: V3
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2 }
+      responses:
+        '200':
+          description: Resultados agrupados (cada grupo limitado a 5; respeita o papel).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SearchResults' }
+
+  # ───────────────────────── Help ─────────────────────────
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /help/articles:
+    get:
+      tags: [Help]
+      operationId: listHelpArticles
+      summary: Categorias e artigos mais buscados (MA-A3)
+      x-since: V3
+      parameters:
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: featured
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Artigos.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HelpIndex' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /help/articles/{slug}:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema: { type: string, example: como-funcionam-os-repasses }
+    get:
+      tags: [Help]
+      operationId: getHelpArticle
+      summary: Artigo (MA-A4)
+      x-since: V3
+      responses:
+        '200':
+          description: Artigo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HelpArticle' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /help/articles/{slug}/feedback:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Help]
+      operationId: sendArticleFeedback
+      summary: "\"Este artigo ajudou?\""
+      x-since: V3
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [helpful]
+              properties:
+                helpful: { type: boolean }
+      responses:
+        '204': { description: Registrado. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /support/tickets:
+    get:
+      tags: [Help]
+      operationId: listSupportTickets
+      summary: Meus chamados (MA-A5)
+      x-since: V3
+      responses:
+        '200':
+          description: Chamados.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/SupportTicket' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Help]
+      operationId: createSupportTicket
+      summary: Falar com o suporte (MA-A5 → MA-A6)
+      x-since: V3
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [subject, message]
+              properties:
+                subject: { type: string, enum: [EVENTS, TICKETS, ORDERS_REFUNDS, PAYMENTS_PAYOUTS, TEAM, ACCOUNT_SECURITY, OTHER] }
+                eventId: { type: string }
+                orderNumber: { type: string, example: '1041' }
+                message: { type: string, maxLength: 2000 }
+                attachment: { type: string, format: binary, description: 'JPG, PNG ou PDF até 10 MB.' }
+      responses:
+        '201':
+          description: Chamado aberto; resposta por e-mail em até 1 dia útil.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SupportTicket' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+  /legal/documents:
+    get:
+      tags: [Help]
+      operationId: listLegalDocuments
+      summary: Termos e privacidade (MA-A7)
+      x-since: V3
+      security: []
+      responses:
+        '200':
+          description: Documentos.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/LegalDocumentSummary' }
+                  dpoEmail: { type: string, format: email, example: privacidade@arclou.com }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /legal/documents/{slug}:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema: { type: string, enum: [termos-de-uso, politica-de-privacidade, politica-de-reembolso, taxas-e-repasses] }
+    get:
+      tags: [Help]
+      operationId: getLegalDocument
+      summary: Documento (MA-A8)
+      x-since: V3
+      security: []
+      responses:
+        '200':
+          description: Documento com seções.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LegalDocument' }
+
+        '404': { $ref: '#/components/responses/NotFound' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token (15 min). Renovar com `/auth/refresh`.
+
+  parameters:
+    OrganizationId:
+      name: organizationId
+      in: path
+      required: true
+      schema: { type: string, example: org_7Kq2 }
+    EventId:
+      name: eventId
+      in: path
+      required: true
+      schema: { type: string, example: evt_tech_summit_2026 }
+    TicketTypeId:
+      name: ticketTypeId
+      in: path
+      required: true
+      schema: { type: string }
+    OrderId:
+      name: orderId
+      in: path
+      required: true
+      description: ID opaco do pedido (o número visível é `number`).
+      schema: { type: string, example: ord_1042 }
+    MemberId:
+      name: memberId
+      in: path
+      required: true
+      schema: { type: string }
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: { type: string }
+    Cursor:
+      name: cursor
+      in: query
+      description: Cursor opaco retornado em `page.nextCursor`.
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: UUID gerado pelo app; repetir a chamada com a mesma chave não repete o efeito.
+      schema: { type: string, format: uuid }
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: ETag do evento lido; evita sobrescrever edição feita por outro membro.
+      schema: { type: string }
+
+  responses:
+    ValidationError:
+      description: Dados inválidos (campos).
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    RuleViolation:
+      description: Regra de negócio impediu a operação (ver `code` e `rule`).
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: Token ausente, inválido ou expirado.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    InvalidCredentials:
+      description: Credenciais ou código inválidos (mensagem genérica).
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    AccountLocked:
+      description: Muitas tentativas; tente após `retryAfterSeconds` (RN30).
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: O papel do usuário não permite a operação.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: Recurso não existe ou não pertence às produtoras do usuário (RN15).
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Conflict:
+      description: "Conflito com o estado atual, por exemplo e-mail já cadastrado (RN14)."
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Gone:
+      description: Link, convite ou token expirado.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    PreconditionFailed:
+      description: O recurso mudou desde a leitura (If-Match).
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    PayloadTooLarge:
+      description: Arquivo acima do limite.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    TooManyRequests:
+      description: Limite de chamadas atingido.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    # ─── Comuns ───
+    Problem:
+      type: object
+      description: Erro no formato RFC 9457.
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri, example: https://api.arclou.com/problems/event-not-publishable }
+        title: { type: string, example: O evento ainda não pode ser publicado }
+        status: { type: integer, example: 409 }
+        detail: { type: string, example: Cadastre pelo menos um tipo de ingresso. }
+        code: { type: string, example: EVENT_WITHOUT_TICKET_TYPES }
+        rule: { type: string, description: 'Regra de negócio violada, quando houver.', example: RN04 }
+        retryAfterSeconds: { type: integer }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [field, code, message]
+            properties:
+              field: { type: string, example: 'ticketTypes[2].quantity' }
+              code: { type: string, example: QUANTITY_MUST_BE_POSITIVE }
+              message: { type: string, example: A quantidade deve ser maior que zero. }
+    Money:
+      type: object
+      description: Valor em centavos (nunca ponto flutuante).
+      required: [amount, currency]
+      properties:
+        amount: { type: integer, example: 32000 }
+        currency: { type: string, const: BRL }
+    Page:
+      type: object
+      required: [data, page]
+      properties:
+        data: { type: array, items: {} }
+        page:
+          type: object
+          required: [hasMore]
+          properties:
+            nextCursor: { type: [string, 'null'] }
+            hasMore: { type: boolean }
+    Target:
+      type: object
+      description: Para onde o app navega ao tocar (alertas, notificações, busca).
+      required: [kind, id]
+      properties:
+        kind: { type: string, enum: [EVENT, EVENT_TICKETS, ORDER, ORDER_LIST, MEMBER, PAYOUTS, DASHBOARD] }
+        id: { type: [string, 'null'] }
+        filter: { type: object, additionalProperties: { type: string }, example: { status: PENDING } }
+    Delta:
+      type: object
+      properties:
+        percent: { type: number, example: 12.4 }
+        trend: { type: string, enum: [UP, DOWN, FLAT] }
+
+    # ─── Enums ───
+    EventStatus:
+      type: string
+      enum: [DRAFT, PUBLISHED, CANCELLED, FINISHED]
+      description: Rascunho, Publicado, Cancelado, Encerrado.
+    EventFormat:
+      type: string
+      enum: [IN_PERSON, ONLINE, HYBRID]
+    SalesState:
+      type: string
+      enum: [NOT_STARTED, OPEN, PAUSED, CLOSED, SOLD_OUT, NONE]
+      description: Estado de venda de um evento publicado (RN18). `NONE` para rascunho/cancelado/encerrado.
+    OrderStatus:
+      type: string
+      enum: [PENDING, CONFIRMED, CANCELLED]
+    PaymentMethod:
+      type: string
+      enum: [PIX, CARD, BOLETO, FREE]
+    TicketStatus:
+      type: string
+      enum: [ISSUED, USED, CANCELLED]
+      description: Ciclo do ADR-0002 (a partir da V5).
+    MemberRole:
+      type: string
+      enum: [OWNER, ADMIN, FINANCE, CHECK_IN]
+    RefundState:
+      type: string
+      enum: [NONE, PARTIAL, FULL]
+
+    # ─── Auth ───
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, example: vinicius@arclou.com }
+        password: { type: string }
+        deviceName: { type: string, example: iPhone 15 Pro }
+    TokenPair:
+      type: object
+      required: [accessToken, refreshToken, expiresIn]
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        expiresIn: { type: integer, example: 900 }
+    LoginResponse:
+      oneOf:
+        - $ref: '#/components/schemas/TokenPair'
+        - type: object
+          required: [twoFactorRequired, challengeToken]
+          properties:
+            twoFactorRequired: { type: boolean, const: true }
+            challengeToken: { type: string }
+    TwoFactorLoginRequest:
+      type: object
+      required: [challengeToken]
+      properties:
+        challengeToken: { type: string }
+        code: { type: string, pattern: '^[0-9]{6}$' }
+        recoveryCode: { type: string, example: 7KQ2-9XMP }
+        trustDevice: { type: boolean, default: false, description: Não pedir 2FA neste aparelho por 30 dias. }
+    PasskeyOptions:
+      type: object
+      required: [challenge]
+      properties:
+        challenge: { type: string }
+        rpId: { type: string, example: arclou.com }
+        timeoutMs: { type: integer, example: 60000 }
+    PasskeyAssertion:
+      type: object
+      description: Resposta WebAuthn do aparelho (campos base64url).
+      required: [credentialId, clientDataJSON]
+      properties:
+        credentialId: { type: string }
+        clientDataJSON: { type: string }
+        authenticatorData: { type: string }
+        signature: { type: string }
+        attestationObject: { type: string }
+    SignupRequest:
+      type: object
+      required: [name, email, password, organizationName, city, acceptTerms]
+      properties:
+        name: { type: string, example: Vinicius Pereira }
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8 }
+        organizationName: { type: string, example: Arclou Produções }
+        city: { type: string, example: 'São Paulo, SP' }
+        acceptTerms: { type: boolean, const: true }
+    SignupResponse:
+      type: object
+      required: [verificationToken, emailMasked]
+      properties:
+        verificationToken: { type: string }
+        emailMasked: { type: string, example: v•••••@arclou.com }
+    InvitationPreview:
+      type: object
+      required: [organization, role, email, invitedBy, expiresAt, hasAccount]
+      properties:
+        organization:
+          type: object
+          properties:
+            name: { type: string, example: Arclou Produções }
+            logoUrl: { type: [string, 'null'] }
+        role: { $ref: '#/components/schemas/MemberRole' }
+        email: { type: string, format: email, example: julia.rocha@gmail.com }
+        invitedBy: { type: string, example: Vinicius Pereira }
+        expiresAt: { type: string, format: date-time }
+        hasAccount: { type: boolean, description: 'Se já existe conta com esse e-mail, o app pede só a senha.' }
+
+    # ─── Me ───
+    Me:
+      type: object
+      required: [id, name, email, emailVerified, twoFactorEnabled, memberships]
+      properties:
+        id: { type: string }
+        name: { type: string, example: Vinicius Pereira }
+        email: { type: string, format: email }
+        emailVerified: { type: boolean }
+        phone: { type: [string, 'null'], example: (11) 98765-4321 }
+        photoUrl: { type: [string, 'null'] }
+        twoFactorEnabled: { type: boolean }
+        marketingOptIn: { type: boolean }
+        passwordChangedAt: { type: [string, 'null'], format: date-time }
+        stats:
+          type: object
+          description: Números do card do perfil.
+          properties:
+            events: { type: integer, example: 4 }
+            ticketsSold: { type: integer, example: 1284 }
+            revenue: { $ref: '#/components/schemas/Money' }
+        memberships:
+          type: array
+          items:
+            type: object
+            required: [organizationId, organizationName, role]
+            properties:
+              organizationId: { type: string }
+              organizationName: { type: string }
+              organizationSlug: { type: string }
+              role: { $ref: '#/components/schemas/MemberRole' }
+    MeUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 2 }
+        phone: { type: [string, 'null'] }
+        marketingOptIn: { type: boolean }
+    Session:
+      type: object
+      required: [id, deviceName, lastSeenAt, current]
+      properties:
+        id: { type: string }
+        deviceName: { type: string, example: Galaxy S23 · App Arclou }
+        city: { type: string, example: 'São Paulo, SP' }
+        lastSeenAt: { type: string, format: date-time }
+        current: { type: boolean }
+        trustedUntil: { type: [string, 'null'], format: date-time }
+    TwoFactorSetup:
+      type: object
+      required: [secret, otpauthUri]
+      properties:
+        secret: { type: string, example: JBSWY3DPEHPK3PXP }
+        otpauthUri: { type: string, example: 'otpauth://totp/Arclou:vinicius@arclou.com?secret=JBSWY3DPEHPK3PXP&issuer=Arclou' }
+    RecoveryCodes:
+      type: object
+      required: [codes]
+      properties:
+        codes:
+          type: array
+          minItems: 10
+          maxItems: 10
+          items: { type: string, example: 7KQ2-9XMP }
+    Passkey:
+      type: object
+      properties:
+        id: { type: string }
+        deviceName: { type: string, example: iPhone 15 Pro }
+        createdAt: { type: string, format: date-time }
+    DeletionEligibility:
+      type: object
+      required: [canDelete, blockers]
+      properties:
+        canDelete: { type: boolean }
+        blockers:
+          type: array
+          items:
+            type: object
+            required: [code, title, description]
+            properties:
+              code: { type: string, enum: [EVENTS_ON_SALE, PENDING_BALANCE, OWNS_TEAM] }
+              title: { type: string, example: 3 eventos à venda }
+              description: { type: string, example: 'Encerre ou cancele Tech Summit 2026, Noite do Jazz e Meetup Backend BR.' }
+              target: { $ref: '#/components/schemas/Target' }
+    Notification:
+      type: object
+      required: [id, type, title, createdAt]
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [NEW_ORDER, LOW_STOCK, PENDING_ORDERS, ORDER_CANCELLED, REFUND, INVITATION, WEEKLY_SUMMARY, SOLD_OUT, EVENT_REMINDER] }
+        title: { type: string, example: 'Novo pedido #1042' }
+        body: { type: string, example: 'Ana Souza · 2× VIP · R$ 320,00' }
+        createdAt: { type: string, format: date-time }
+        readAt: { type: [string, 'null'], format: date-time }
+        target: { $ref: '#/components/schemas/Target' }
+    NotificationPreferences:
+      type: object
+      required: [channels, events]
+      properties:
+        channels:
+          type: object
+          description: Sem SMS (removido do produto).
+          properties:
+            email: { type: boolean }
+            push: { type: boolean }
+        events:
+          type: object
+          properties:
+            newOrder: { type: boolean }
+            pendingOver24h: { type: boolean }
+            refundRequested: { type: boolean }
+            orderCancelled: { type: boolean }
+            lowStock90: { type: boolean }
+            soldOut: { type: boolean }
+            eventReminder24h: { type: boolean }
+            weeklySummary: { type: boolean }
+        weeklySummaryAt:
+          type: object
+          properties:
+            weekday: { type: string, enum: [MON, TUE, WED, THU, FRI, SAT, SUN] }
+            time: { type: string, example: '08:00' }
+
+    # ─── Organizations & Team ───
+    Organization:
+      type: object
+      required: [id, name, slug, publicUrl, settings]
+      properties:
+        id: { type: string }
+        name: { type: string, example: Arclou Produções }
+        slug: { type: string, example: arclou-producoes }
+        publicUrl: { type: string, example: https://arclou.com/o/arclou-producoes }
+        city: { type: string }
+        about: { type: string, maxLength: 300 }
+        logoUrl: { type: [string, 'null'] }
+        coverUrl: { type: [string, 'null'] }
+        instagram: { type: [string, 'null'] }
+        website: { type: [string, 'null'] }
+        contactEmail: { type: [string, 'null'], format: email }
+        showPastEvents: { type: boolean }
+        showTicketsSold: { type: boolean }
+        stats:
+          type: object
+          properties:
+            events: { type: integer, example: 4 }
+            ticketsSold: { type: integer, example: 1456 }
+        settings: { $ref: '#/components/schemas/OrganizationSettings' }
+        security: { $ref: '#/components/schemas/OrganizationSecurity' }
+    OrganizationSettings:
+      type: object
+      properties:
+        language: { type: string, example: pt-BR }
+        timezone: { type: string, example: America/Sao_Paulo }
+        currency: { type: string, const: BRL }
+        dateFormat: { type: string, example: DD/MM/AAAA }
+        defaultMaxPerOrder: { type: integer, default: 6, description: RN19 }
+        refundPolicyDays: { type: integer, default: 7, description: RN24 }
+        passFeeToBuyer: { type: boolean, default: true, description: RN17 }
+        waitlistDefault: { type: boolean, default: false, description: RN22 — padrão para tipos novos. }
+    OrganizationSecurity:
+      type: object
+      properties:
+        require2faForTeam: { type: boolean }
+        approveNewDevices: { type: boolean }
+        confirmSensitiveActions: { type: boolean, description: Senha ao mudar dados bancários. }
+        sessionTimeoutDays: { type: integer, example: 30 }
+    OrganizationUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        slug: { type: string, description: Mudar quebra links já compartilhados. }
+        city: { type: string }
+        about: { type: string, maxLength: 300 }
+        instagram: { type: [string, 'null'] }
+        website: { type: [string, 'null'] }
+        contactEmail: { type: [string, 'null'], format: email }
+        showPastEvents: { type: boolean }
+        showTicketsSold: { type: boolean }
+        settings: { $ref: '#/components/schemas/OrganizationSettings' }
+        security: { $ref: '#/components/schemas/OrganizationSecurity' }
+    ActivityEntry:
+      type: object
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [NEW_DEVICE_LOGIN, API_KEY_CREATED, BANK_ACCOUNT_CHANGED, MEMBER_JOINED, MEMBER_REMOVED, PASSWORD_CHANGED] }
+        description: { type: string, example: 'Galaxy S23 · São Paulo, SP' }
+        actorName: { type: [string, 'null'], example: Vinicius Pereira }
+        createdAt: { type: string, format: date-time }
+    Member:
+      type: object
+      required: [id, role, status]
+      properties:
+        id: { type: string }
+        role: { $ref: '#/components/schemas/MemberRole' }
+        status: { type: string, enum: [INVITED, ACTIVE] }
+        user:
+          type: [object, 'null']
+          properties:
+            id: { type: string }
+            name: { type: string }
+            email: { type: string, format: email }
+            photoUrl: { type: [string, 'null'] }
+        invitedEmail: { type: [string, 'null'], format: email }
+        expiresAt: { type: [string, 'null'], format: date-time }
+        isYou: { type: boolean }
+
+    # ─── Dashboard ───
+    Dashboard:
+      type: object
+      required: [stage, kpis, attention, upcomingEvents, recentOrders]
+      properties:
+        stage: { type: string, enum: [FIRST_ACCESS, EVENT_CREATED, PUBLISHED_NO_SALES, WITH_DATA] }
+        onboarding:
+          type: [object, 'null']
+          description: Presente enquanto houver passos (0/3…3/3).
+          properties:
+            completed: { type: integer, example: 1 }
+            total: { type: integer, example: 3 }
+            steps:
+              type: array
+              items:
+                type: object
+                properties:
+                  key: { type: string, enum: [CREATE_EVENT, CONFIGURE_TICKETS, PUBLISH] }
+                  status: { type: string, enum: [DONE, CURRENT, UPCOMING] }
+                  eventId: { type: [string, 'null'] }
+        justPublished:
+          type: [object, 'null']
+          description: Banner "<evento> está no ar!".
+          properties:
+            eventId: { type: string }
+            eventName: { type: string }
+            publicUrl: { type: string }
+        kpis:
+          type: object
+          properties:
+            revenue: { $ref: '#/components/schemas/Kpi' }
+            ticketsSold: { $ref: '#/components/schemas/Kpi' }
+            orders: { $ref: '#/components/schemas/Kpi' }
+            conversionRate: { $ref: '#/components/schemas/Kpi' }
+        attention:
+          type: array
+          items: { $ref: '#/components/schemas/AttentionItem' }
+        salesSeries:
+          type: array
+          items: { $ref: '#/components/schemas/SalesPoint' }
+        upcomingEvents:
+          type: array
+          items: { $ref: '#/components/schemas/EventSummary' }
+        recentOrders:
+          type: array
+          items: { $ref: '#/components/schemas/OrderSummary' }
+    Kpi:
+      type: [object, 'null']
+      description: '`null` quando a métrica ainda não existe (ex.: conversão antes da V8).'
+      properties:
+        value: { description: Money ou número., oneOf: [{ $ref: '#/components/schemas/Money' }, { type: number }] }
+        delta: { $ref: '#/components/schemas/Delta' }
+        comparison: { type: string, example: vs. 30 dias anteriores }
+    AttentionItem:
+      type: object
+      required: [type, title, tone, target]
+      properties:
+        type: { type: string, enum: [LOW_STOCK, PENDING_ORDERS, DRAFT_WITHOUT_TICKETS, SALES_PAUSED, CHECK_IN_TOMORROW] }
+        tone: { type: string, enum: [WARNING, DANGER, NEUTRAL] }
+        title: { type: string, example: Lote VIP quase esgotado }
+        description: { type: string, example: Tech Summit 2026 · 92 de 100 vendidos }
+        target: { $ref: '#/components/schemas/Target' }
+    SalesPoint:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        revenue: { $ref: '#/components/schemas/Money' }
+        tickets: { type: integer }
+
+    # ─── Events ───
+    Location:
+      type: object
+      properties:
+        venueName: { type: string, example: Expo Center Norte }
+        street: { type: string, example: 'Rua José Bernardo Pinto, 333' }
+        district: { type: string, example: Vila Guilherme }
+        city: { type: string, example: São Paulo }
+        state: { type: string, example: SP }
+        zipCode: { type: string, example: 02055-000 }
+        latitude: { type: [number, 'null'] }
+        longitude: { type: [number, 'null'] }
+    Capacity:
+      type: object
+      properties:
+        sold: { type: integer, example: 412 }
+        total: { type: integer, example: 500 }
+        available: { type: integer, example: 88 }
+    EventSummary:
+      type: object
+      required: [id, name, status, salesState]
+      properties:
+        id: { type: string }
+        name: { type: string, example: Tech Summit 2026 }
+        status: { $ref: '#/components/schemas/EventStatus' }
+        salesState: { $ref: '#/components/schemas/SalesState' }
+        startsAt: { type: [string, 'null'], format: date-time }
+        format: { $ref: '#/components/schemas/EventFormat' }
+        venueName: { type: [string, 'null'] }
+        city: { type: [string, 'null'] }
+        coverUrl: { type: [string, 'null'] }
+        capacity: { $ref: '#/components/schemas/Capacity' }
+        revenue: { $ref: '#/components/schemas/Money' }
+        refundedTickets: { type: [integer, 'null'], description: Eventos cancelados. }
+        warnings:
+          type: array
+          items: { type: string, enum: [NO_TICKET_TYPES, LOW_STOCK, SOLD_OUT] }
+    EventStatusCounts:
+      type: object
+      properties:
+        ALL: { type: integer, example: 6 }
+        PUBLISHED: { type: integer, example: 3 }
+        DRAFT: { type: integer, example: 1 }
+        FINISHED: { type: integer, example: 1 }
+        CANCELLED: { type: integer, example: 1 }
+    Event:
+      allOf:
+        - $ref: '#/components/schemas/EventSummary'
+        - type: object
+          properties:
+            organizationId: { type: string }
+            description: { type: [string, 'null'], maxLength: 2000 }
+            category: { type: [string, 'null'], example: Tecnologia }
+            type: { type: [string, 'null'], example: Conferência }
+            ageRating: { type: [string, 'null'], example: Livre }
+            language: { type: [string, 'null'], example: pt-BR }
+            endsAt: { type: [string, 'null'], format: date-time }
+            gatesOpenAt: { type: [string, 'null'], format: date-time }
+            location: { oneOf: [{ $ref: '#/components/schemas/Location' }, { type: 'null' }] }
+            streamUrl: { type: [string, 'null'] }
+            slug: { type: [string, 'null'], example: tech-summit-2026 }
+            publicUrl: { type: [string, 'null'], example: https://arclou.com/e/tech-summit-2026 }
+            visibility: { type: string, enum: [PUBLIC, UNLISTED] }
+            publishAt: { type: [string, 'null'], format: date-time, description: Publicação agendada. }
+            publishedAt: { type: [string, 'null'], format: date-time }
+            salesEndAt: { type: [string, 'null'], format: date-time, example: '2026-10-12T08:00:00-03:00' }
+            salesPausedAt: { type: [string, 'null'], format: date-time }
+            salesPublicNotice: { type: [string, 'null'] }
+            checkInOpensAt: { type: [string, 'null'], format: date-time }
+            cancellation:
+              type: [object, 'null']
+              properties:
+                cancelledAt: { type: string, format: date-time }
+                reason: { type: string }
+                refunds:
+                  type: object
+                  properties:
+                    ordersDone: { type: integer, example: 180 }
+                    ordersTotal: { type: integer, example: 238 }
+                    amountDone: { $ref: '#/components/schemas/Money' }
+                    amountTotal: { $ref: '#/components/schemas/Money' }
+            duplicatedFrom: { type: [string, 'null'], description: Evento de origem (EV-E4). }
+            publishChecklist:
+              type: array
+              description: Itens que faltam para publicar (EV-B8; vazio = pode publicar).
+              items:
+                type: object
+                properties:
+                  key: { type: string, enum: [NAME, DATE_AND_PLACE, TICKET_TYPES, VALID_TICKET_TYPES] }
+                  done: { type: boolean }
+            ticketTypes:
+              type: array
+              items: { $ref: '#/components/schemas/TicketType' }
+            etag: { type: string }
+    EventCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80, description: RN01 }
+        category: { type: string }
+        type: { type: string }
+        format: { $ref: '#/components/schemas/EventFormat' }
+        description: { type: string, maxLength: 2000 }
+        ageRating: { type: string }
+        language: { type: string }
+    EventUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        category: { type: string }
+        type: { type: string }
+        format: { $ref: '#/components/schemas/EventFormat' }
+        description: { type: string, maxLength: 2000 }
+        ageRating: { type: string }
+        language: { type: string }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        gatesOpenAt: { type: string, format: date-time }
+        location: { $ref: '#/components/schemas/Location' }
+        streamUrl: { type: string }
+        salesEndAt: { type: string, format: date-time }
+    TicketType:
+      type: object
+      required: [id, name, price, quantity, sold, available]
+      properties:
+        id: { type: string }
+        name: { type: string, example: VIP }
+        description: { type: [string, 'null'], example: 'Área VIP, almoço e meet & greet' }
+        price: { $ref: '#/components/schemas/Money' }
+        quantity: { type: integer, example: 100 }
+        sold: { type: integer, example: 92 }
+        available: { type: integer, example: 8 }
+        salesStartAt: { type: [string, 'null'], format: date-time, description: RN40 }
+        salesEndAt: { type: [string, 'null'], format: date-time, description: RN40 }
+        requiresDocument: { type: boolean, description: RN41 }
+        waitlistEnabled: { type: boolean, description: RN22 }
+        waitlistCount: { type: integer, example: 0 }
+        level: { type: string, enum: [NORMAL, HIGH, SOLD_OUT], description: Para a barra de capacidade. }
+    TicketTypeInput:
+      type: object
+      required: [name, price, quantity]
+      properties:
+        name: { type: string, minLength: 1 }
+        description: { type: string }
+        price: { $ref: '#/components/schemas/Money' }
+        quantity: { type: integer, minimum: 1, description: RN07 }
+        salesStartAt: { type: [string, 'null'], format: date-time }
+        salesEndAt: { type: [string, 'null'], format: date-time }
+        requiresDocument: { type: boolean, default: false }
+        waitlistEnabled: { type: boolean }
+    EventOverview:
+      type: object
+      properties:
+        kpis:
+          type: object
+          properties:
+            revenue: { $ref: '#/components/schemas/Kpi' }
+            ticketsSold: { $ref: '#/components/schemas/Kpi' }
+            orders: { $ref: '#/components/schemas/Kpi' }
+            averageTicket: { $ref: '#/components/schemas/Kpi' }
+            conversionRate: { $ref: '#/components/schemas/Kpi' }
+        attention:
+          type: array
+          items: { $ref: '#/components/schemas/AttentionItem' }
+        checkIn:
+          type: object
+          properties:
+            opensAt: { type: [string, 'null'], format: date-time }
+            teamSize: { type: integer }
+        salesSeries:
+          type: array
+          items: { $ref: '#/components/schemas/SalesPoint' }
+        ticketTypes:
+          type: array
+          items: { $ref: '#/components/schemas/TicketType' }
+        recentOrders:
+          type: array
+          items: { $ref: '#/components/schemas/OrderSummary' }
+        tabCounts:
+          type: object
+          properties:
+            ticketTypes: { type: integer, example: 3 }
+            orders: { type: integer, example: 238 }
+            attendees: { type: integer, example: 412 }
+
+    # ─── Orders ───
+    OrderStatusCounts:
+      type: object
+      properties:
+        ALL: { type: integer }
+        PENDING: { type: integer, example: 14 }
+        CONFIRMED: { type: integer }
+        CANCELLED: { type: integer }
+    OrderSummary:
+      type: object
+      required: [id, number, status, buyerName, event, subtotal, createdAt]
+      properties:
+        id: { type: string }
+        number: { type: string, example: '1042' }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        refundState: { $ref: '#/components/schemas/RefundState' }
+        buyerName: { type: string, example: Ana Souza }
+        buyerInitials: { type: string, example: AS }
+        event:
+          type: object
+          properties:
+            id: { type: string }
+            name: { type: string, example: Tech Summit 2026 }
+        itemsSummary: { type: string, example: 2× VIP }
+        subtotal: { $ref: '#/components/schemas/Money' }
+        paymentMethod: { $ref: '#/components/schemas/PaymentMethod' }
+        statusDetail: { type: [string, 'null'], example: cartão recusado }
+        createdAt: { type: string, format: date-time }
+    Order:
+      allOf:
+        - $ref: '#/components/schemas/OrderSummary'
+        - type: object
+          properties:
+            buyer:
+              type: object
+              properties:
+                name: { type: string }
+                email: { type: string, format: email }
+                documentMasked: { type: [string, 'null'], example: •••.456.789-••, description: RN42 }
+            items:
+              type: array
+              items:
+                type: object
+                properties:
+                  ticketTypeId: { type: string }
+                  ticketTypeName: { type: string }
+                  quantity: { type: integer }
+                  unitPrice: { $ref: '#/components/schemas/Money' }
+                  subtotal: { $ref: '#/components/schemas/Money' }
+            tickets:
+              type: array
+              items: { $ref: '#/components/schemas/Ticket' }
+            payment:
+              type: object
+              properties:
+                method: { $ref: '#/components/schemas/PaymentMethod' }
+                serviceFee: { $ref: '#/components/schemas/Money' }
+                totalPaid: { $ref: '#/components/schemas/Money' }
+                paidAt: { type: [string, 'null'], format: date-time }
+                expiresAt: { type: [string, 'null'], format: date-time, description: Pix/boleto pendente (RN21). }
+                boletoDueDate: { type: [string, 'null'], format: date }
+            organizerReceives: { $ref: '#/components/schemas/Money' }
+            refundedAmount: { $ref: '#/components/schemas/Money' }
+            releaseAt: { type: [string, 'null'], format: date, description: Liberação para repasse (2 dias após o evento). }
+            refunds:
+              type: array
+              items: { $ref: '#/components/schemas/Refund' }
+            timeline:
+              type: array
+              items:
+                type: object
+                properties:
+                  type: { type: string, enum: [CREATED, PAYMENT_GENERATED, PAID, TICKETS_ISSUED, RELEASED, REFUND_REQUESTED, REFUND_DONE, CANCELLED, EXPIRED] }
+                  at: { type: [string, 'null'], format: date-time }
+                  state: { type: string, enum: [DONE, WARN, DANGER, NEXT] }
+                  description: { type: string }
+                  actorName: { type: [string, 'null'] }
+    Ticket:
+      type: object
+      required: [id, number, ticketTypeName, status]
+      properties:
+        id: { type: string }
+        number: { type: string, example: '10421' }
+        ticketTypeName: { type: string, example: VIP }
+        holderName: { type: string, example: Ana Souza }
+        holderEmail: { type: [string, 'null'], format: email }
+        status: { $ref: '#/components/schemas/TicketStatus' }
+        usedAt: { type: [string, 'null'], format: date-time }
+        usedGateName: { type: [string, 'null'] }
+    RefundRequest:
+      type: object
+      required: [type, reason]
+      properties:
+        type: { type: string, enum: [FULL, PARTIAL] }
+        ticketIds:
+          type: array
+          description: Obrigatório em PARTIAL.
+          items: { type: string }
+        reason: { type: string, enum: [BUYER_REQUEST, EVENT_CHANGE, DUPLICATE, FRAUD, OTHER] }
+    RefundPreview:
+      type: object
+      properties:
+        buyerReceives: { $ref: '#/components/schemas/Money' }
+        feeReturned: { $ref: '#/components/schemas/Money' }
+        deductedFromBalance: { $ref: '#/components/schemas/Money' }
+        ticketsCancelled: { type: integer }
+        orderStatusAfter: { $ref: '#/components/schemas/OrderStatus' }
+        expectedBy: { type: string, format: date, description: Até 7 dias úteis. }
+    Refund:
+      type: object
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [FULL, PARTIAL] }
+        amount: { $ref: '#/components/schemas/Money' }
+        feeAmount: { $ref: '#/components/schemas/Money' }
+        ticketIds:
+          type: array
+          items: { type: string }
+        status: { type: string, enum: [PROCESSING, DONE, FAILED] }
+        reason: { type: string }
+        requestedBy: { type: string }
+        createdAt: { type: string, format: date-time }
+        expectedBy: { type: string, format: date }
+    RefundResult:
+      type: object
+      required: [refund, order]
+      properties:
+        refund: { $ref: '#/components/schemas/Refund' }
+        order: { $ref: '#/components/schemas/Order' }
+    Attendee:
+      type: object
+      properties:
+        ticketId: { type: string }
+        ticketNumber: { type: string }
+        holderName: { type: string }
+        holderEmail: { type: [string, 'null'] }
+        ticketTypeName: { type: string }
+        orderNumber: { type: string }
+        status: { $ref: '#/components/schemas/TicketStatus' }
+        usedAt: { type: [string, 'null'], format: date-time }
+
+    # ─── Check-in ───
+    Gate:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string, example: Portão B }
+        description: { type: string, example: Área VIP }
+        ticketTypeIds:
+          type: array
+          items: { type: string }
+        present: { type: integer, example: 74 }
+        total: { type: integer, example: 92 }
+    CheckInEvent:
+      type: object
+      required: [eventId, name, open, present, total, gates]
+      properties:
+        eventId: { type: string }
+        name: { type: string }
+        startsAt: { type: string, format: date-time }
+        venueName: { type: string }
+        checkInOpensAt: { type: string, format: date-time }
+        open: { type: boolean }
+        present: { type: integer, example: 287 }
+        total: { type: integer, example: 412 }
+        gates:
+          type: array
+          items: { $ref: '#/components/schemas/Gate' }
+    CheckInSettings:
+      type: object
+      properties:
+        opensAt: { type: string, format: date-time }
+        gates:
+          type: array
+          items: { $ref: '#/components/schemas/Gate' }
+        manualSearchEnabled: { type: boolean, default: true }
+        offlineEnabled: { type: boolean, default: true }
+        documentCheckEnabled: { type: boolean, default: true, description: Alerta para tipos com `requiresDocument`. }
+        blockReentry: { type: boolean, const: true, description: RN36 — sempre ativo. }
+    CheckInSnapshot:
+      type: object
+      required: [eventId, generatedAt, tickets]
+      properties:
+        eventId: { type: string }
+        generatedAt: { type: string, format: date-time }
+        tickets:
+          type: array
+          items:
+            type: object
+            properties:
+              ticketId: { type: string }
+              qrTokenHash: { type: string, description: SHA-256 do token do QR; o app compara localmente. }
+              number: { type: string }
+              holderName: { type: string }
+              ticketTypeName: { type: string }
+              requiresDocument: { type: boolean }
+              status: { $ref: '#/components/schemas/TicketStatus' }
+              usedAt: { type: [string, 'null'], format: date-time }
+    ScanRequest:
+      type: object
+      required: [clientScanId, gateId, method, scannedAt]
+      properties:
+        clientScanId: { type: string, format: uuid, description: Idempotência e ordenação offline. }
+        qrToken: { type: string, description: Conteúdo do QR (method = QR). }
+        ticketId: { type: string, description: Validação manual (method = MANUAL). }
+        gateId: { type: string }
+        method: { type: string, enum: [QR, MANUAL] }
+        scannedAt: { type: string, format: date-time, description: Hora do aparelho (usada no conflito offline). }
+        documentChecked: { type: boolean, description: Manual exige conferir documento com foto (RN39). }
+    ScanResult:
+      type: object
+      required: [scanId, result]
+      properties:
+        scanId: { type: string }
+        clientScanId: { type: string }
+        result: { type: string, enum: [ACCEPTED, REQUIRES_DOCUMENT, REJECTED_USED, REJECTED_CANCELLED, REJECTED_OTHER_EVENT, REJECTED_UNKNOWN, REJECTED_CONFLICT] }
+        ticket:
+          type: [object, 'null']
+          properties:
+            ticketId: { type: string }
+            number: { type: string }
+            holderName: { type: string }
+            ticketTypeName: { type: string }
+            orderNumber: { type: string }
+        previousUse:
+          type: [object, 'null']
+          description: Para REJECTED_USED / REJECTED_CONFLICT.
+          properties:
+            at: { type: string, format: date-time }
+            gateName: { type: string }
+            validatedBy: { type: string }
+        otherEvent:
+          type: [object, 'null']
+          properties:
+            name: { type: string, example: Noite do Jazz }
+            startsAt: { type: string, format: date-time }
+        counters:
+          type: object
+          properties:
+            present: { type: integer, example: 288 }
+            total: { type: integer, example: 412 }
+    CheckInOrderMatch:
+      type: object
+      properties:
+        orderNumber: { type: string, example: '1040' }
+        buyerName: { type: string, example: Carla Dias }
+        summary: { type: string, example: 4× Pista · comprado em 06 out }
+        tickets:
+          type: array
+          items: { $ref: '#/components/schemas/Ticket' }
+    LiveCheckIn:
+      type: object
+      properties:
+        open: { type: boolean }
+        openedAt: { type: string, format: date-time }
+        present: { type: integer, example: 287 }
+        total: { type: integer, example: 412 }
+        byTicketType:
+          type: array
+          items:
+            type: object
+            properties:
+              ticketTypeName: { type: string }
+              present: { type: integer }
+              total: { type: integer }
+        byGate:
+          type: array
+          items: { $ref: '#/components/schemas/Gate' }
+        team:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              gateName: { type: string }
+              scans: { type: integer }
+              online: { type: boolean }
+        incidents:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string, enum: [DUPLICATE_ACROSS_GATES, REUSE_ATTEMPTS, OTHER_EVENT] }
+              tone: { type: string, enum: [DANGER, WARNING, NEUTRAL] }
+              title: { type: string }
+              description: { type: string }
+
+    # ─── Payments ───
+    Balance:
+      type: object
+      properties:
+        available: { $ref: '#/components/schemas/Money' }
+        pending: { $ref: '#/components/schemas/Money' }
+        nextPayout:
+          type: [object, 'null']
+          properties:
+            date: { type: string, format: date }
+            amount: { $ref: '#/components/schemas/Money' }
+            bankAccountMasked: { type: string, example: Itaú ••••89-0 }
+        feeRules:
+          type: object
+          properties:
+            percent: { type: number, example: 8 }
+            minimumPerTicket: { $ref: '#/components/schemas/Money' }
+            freeTicketsExempt: { type: boolean, const: true }
+    BankAccount:
+      type: object
+      properties:
+        holderType: { type: string, enum: [INDIVIDUAL, COMPANY] }
+        documentMasked: { type: string, example: 12.345.678/0001-90 }
+        legalName: { type: string, example: Arclou Produções LTDA }
+        bankCode: { type: string, example: '341' }
+        bankName: { type: string, example: Itaú Unibanco }
+        branch: { type: string }
+        accountMasked: { type: string, example: '••••89-0' }
+        pixKey: { type: [string, 'null'] }
+        verificationStatus: { type: string, enum: [VERIFIED, PENDING, REJECTED, NONE] }
+        payoutSettings: { $ref: '#/components/schemas/PayoutSettings' }
+    BankAccountInput:
+      type: object
+      required: [holderType, document, legalName, bankCode, branch, account]
+      properties:
+        holderType: { type: string, enum: [INDIVIDUAL, COMPANY] }
+        document: { type: string }
+        legalName: { type: string }
+        bankCode: { type: string }
+        branch: { type: string }
+        account: { type: string }
+        pixKey: { type: string }
+        password: { type: string, description: Exigida se `confirmSensitiveActions` estiver ativa. }
+    PayoutSettings:
+      type: object
+      properties:
+        frequency: { type: string, enum: [WEEKLY, BIWEEKLY, MONTHLY], default: WEEKLY }
+        weekday: { type: string, enum: [MON, TUE, WED, THU, FRI], default: MON }
+        automatic: { type: boolean, default: true }
+    Payout:
+      type: object
+      properties:
+        id: { type: string }
+        amount: { $ref: '#/components/schemas/Money' }
+        scheduledFor: { type: string, format: date }
+        paidAt: { type: [string, 'null'], format: date-time }
+        status: { type: string, enum: [SCHEDULED, PAID, FAILED] }
+        bankAccountMasked: { type: string }
+
+    # ─── Integrations ───
+    WebhookInput:
+      type: object
+      required: [url, events]
+      properties:
+        url: { type: string, format: uri }
+        events:
+          type: array
+          items: { type: string, enum: [order.confirmed, order.refunded, order.cancelled, ticket.used, event.published, event.cancelled] }
+        active: { type: boolean, default: true }
+    Webhook:
+      allOf:
+        - $ref: '#/components/schemas/WebhookInput'
+        - type: object
+          properties:
+            id: { type: string }
+            lastDelivery:
+              type: [object, 'null']
+              properties:
+                at: { type: string, format: date-time }
+                statusCode: { type: integer, example: 200 }
+                durationMs: { type: integer, example: 142 }
+    WebhookCreated:
+      allOf:
+        - $ref: '#/components/schemas/Webhook'
+        - type: object
+          required: [signingSecret]
+          properties:
+            signingSecret: { type: string, description: Exibido uma única vez. }
+    ApiKey:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: [string, 'null'] }
+        environment: { type: string, enum: [LIVE, TEST] }
+        maskedKey: { type: string, example: 'arc_live_••••3f9a' }
+        createdAt: { type: string, format: date-time }
+        lastUsedAt: { type: [string, 'null'], format: date-time }
+    ApiKeyCreated:
+      allOf:
+        - $ref: '#/components/schemas/ApiKey'
+        - type: object
+          required: [key]
+          properties:
+            key: { type: string, description: Chave completa — exibida uma única vez. }
+    Pixel:
+      type: object
+      required: [provider, pixelId]
+      properties:
+        provider: { type: string, enum: [META, GOOGLE_ANALYTICS_4, GOOGLE_TAG_MANAGER] }
+        pixelId: { type: string }
+        connected: { type: boolean }
+
+    # ─── Exports & Search ───
+    ExportRequest:
+      type: object
+      required: [type, format]
+      properties:
+        type: { type: string, enum: [EVENTS, ORDERS, ATTENDEES] }
+        format: { type: string, enum: [CSV] }
+        filters:
+          type: object
+          description: Mesmos parâmetros das listas (status, eventId, period, paymentMethod, q…).
+          additionalProperties: true
+    ExportJob:
+      type: object
+      required: [id, status]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [QUEUED, PROCESSING, SENT, FAILED] }
+        deliveredTo: { type: string, format: email, example: vinicius@arclou.com }
+        fileName: { type: [string, 'null'], example: pedidos-06-10.csv }
+        containsPersonalData: { type: boolean }
+    SearchResults:
+      type: object
+      properties:
+        total: { type: integer, example: 3 }
+        events:
+          type: array
+          items: { $ref: '#/components/schemas/EventSummary' }
+        orders:
+          type: array
+          items: { $ref: '#/components/schemas/OrderSummary' }
+        attendees:
+          type: array
+          items: { $ref: '#/components/schemas/Attendee' }
+        members:
+          type: array
+          items: { $ref: '#/components/schemas/Member' }
+
+    # ─── Help ───
+    HelpIndex:
+      type: object
+      properties:
+        categories:
+          type: array
+          items:
+            type: object
+            properties:
+              key: { type: string, example: pagamentos-e-repasses }
+              title: { type: string, example: Pagamentos e repasses }
+              articleCount: { type: integer, example: 8 }
+        articles:
+          type: array
+          items:
+            type: object
+            properties:
+              slug: { type: string }
+              title: { type: string }
+              category: { type: string }
+    HelpArticle:
+      type: object
+      required: [slug, title, category, updatedAt, body]
+      properties:
+        slug: { type: string }
+        title: { type: string, example: Como funcionam os repasses }
+        category: { type: string }
+        updatedAt: { type: string, format: date }
+        readingMinutes: { type: integer, example: 3 }
+        body: { type: string, description: Markdown. }
+        related:
+          type: array
+          items:
+            type: object
+            properties:
+              slug: { type: string }
+              title: { type: string }
+    SupportTicket:
+      type: object
+      properties:
+        id: { type: string }
+        protocol: { type: string, example: S-2104 }
+        subject: { type: string }
+        eventName: { type: [string, 'null'] }
+        orderNumber: { type: [string, 'null'] }
+        status: { type: string, enum: [OPEN, ANSWERED, RESOLVED] }
+        createdAt: { type: string, format: date-time }
+        responseDueBy: { type: string, format: date-time }
+    LegalDocumentSummary:
+      type: object
+      properties:
+        slug: { type: string }
+        title: { type: string, example: Política de privacidade (LGPD) }
+        subtitle: { type: string, example: Atualizado em 01 out 2026 }
+    LegalDocument:
+      type: object
+      required: [slug, title, updatedAt, sections]
+      properties:
+        slug: { type: string }
+        title: { type: string }
+        updatedAt: { type: string, format: date }
+        readingMinutes: { type: integer }
+        sections:
+          type: array
+          items:
+            type: object
+            properties:
+              heading: { type: string }
+              body: { type: string }

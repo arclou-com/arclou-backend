@@ -3,6 +3,8 @@
 > **Objetivo:** garantir que o que está desenhado no Figma é exatamente o que será desenvolvido neste repositório.
 >
 > **Figma:** [Arclou](https://www.figma.com/design/jFLXJ5S0eonNsXzx5ULmUu/Arclou) — toda tela tem um código (`EV-C3`, `PT-B2`…) e esse código é a referência usada em Issues, PRs e neste documento.
+>
+> **API do app:** [`docs/api/`](api/README.md) — o guia mapeia cada tela do app do organizador para os endpoints que ela usa.
 
 ---
 

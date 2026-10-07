@@ -29,3 +29,4 @@ O que isso implica, positivo e negativo?
 | [0001](0001-superficies-do-produto.md) | Superfícies do produto: app mobile do organizador e web responsivo do participante | Accepted |
 | [0002](0002-ciclo-de-vida-do-ticket-e-check-in.md) | Ciclo de vida do ticket e check-in | Accepted |
 | [0003](0003-produtora-e-conta-unica.md) | Produtora e conta única | Accepted |
+| [0004](0004-contrato-de-api-contract-first.md) | Contrato de API contract-first (OpenAPI do app do organizador) | Proposed |
