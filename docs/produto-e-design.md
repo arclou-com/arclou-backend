@@ -91,6 +91,9 @@ Legenda de versão: a coluna **Backend** indica a primeira versão em que a tela
 | PN-A2 | Evento criado (1/3) | Evento em `DRAFT` sem tipos de ingresso | V2 |
 | PN-A3 | Evento publicado · sem vendas | Evento `PUBLISHED`, nenhum pedido | V2 |
 | PN-A4 | Painel com dados | Receita, ingressos vendidos, alertas (lote quase esgotado, pedidos pendentes, rascunho sem ingressos), próximos eventos, pedidos recentes | V3 / conversão: V8 (até lá o card não aparece) |
+| PN-B1 | Notificações | Hoje / ontem; não lidas destacadas; marcar todas como lidas; cada aviso leva ao item (pedido, lote, pendentes, convite, resumo) | V6 |
+| PN-B2 | Busca global · recentes | Buscas recentes e atalhos (pendentes, ingressos esgotando, rascunhos) | V3 |
+| PN-B3 | Busca global · resultados | Resultados agrupados em Pedidos, Participantes e Equipe | V3 |
 
 #### 📱 Eventos — `EV`
 
@@ -102,6 +105,7 @@ Legenda de versão: a coluna **Backend** indica a primeira versão em que a tela
 | EV-A5 | Busca (resultados / sem resultado) | Busca por nome **ou** cidade | V3 |
 | EV-A6 | Filtrar e ordenar | Ordenar por data, criação, nome, mais vendidos; filtros período, formato, cidade | V3 |
 | EV-A7 | Filtros aplicados · Menu ⋯ (exportar) | Exportar lista (CSV) respeitando filtros; copiar link da página do organizador | V3 |
+| EV-A8 | Lista por status | Publicados, Rascunhos, Encerrados e Cancelados; abas com contagem; aba ativa rolada à vista | V2 |
 | EV-B1–B2 | Novo evento (vazio / validação) | Nome obrigatório (RN01); validação no topo + campo em erro | V2 (validação com exceptions: V1.5) |
 | EV-B3 | 1. Detalhes | Nome, categoria, formato, descrição, classificação etária, idioma, capa | V2 / capa: V3 |
 | EV-B4–B6 | 2. Data e local (Online / Presencial / Híbrido) | Início e término; endereço com mapa; link de transmissão | V2 |
@@ -142,6 +146,10 @@ Aba **Pedidos** do Tab bar: todos os pedidos da produtora, de todos os eventos. 
 | PD-A6 | Reenvios (toast) | "Ingressos reenviados" (pedido confirmado) e "Boleto reenviado" (pedido pendente) | V6 (e-mail) |
 | PD-A7 | Cancelar pedido pendente | Sheet vermelha: boleto deixa de valer, reserva volta para venda, comprador é avisado; nada a devolver | V5 |
 | PD-A8 | Pedido cancelado | `CANCELLED` por ação da produtora; reserva liberada; histórico registra quem cancelou | V5 |
+| PD-B1 | Lista por status | Pendentes (com alerta e paginação), Confirmados, Cancelados | V2 |
+| PD-B2 | Lista por evento | Filtro por evento atualiza o alerta de pendentes; evento gratuito mostra pedidos "Gratuito" | V2 |
+| PD-B3 | Filtrar pedidos | Período, forma de pagamento, ordenação; contagem no botão | V3 |
+| PD-B4 | Exportar pedidos | Pedidos ou participantes em CSV, respeitando filtros; aviso de LGPD; confirmação por e-mail | V3 / V6 |
 
 #### 📱 Mais — `MA`
 
@@ -155,6 +163,8 @@ Aba **Mais** do Tab bar: conta, produtora e suporte. O perfil e o "Sair da conta
 | MA-A4 | Artigos de ajuda (mais buscados) | 5 artigos, um por item da lista de MA-A3. O conteúdo cita as regras vigentes — mudou a regra, muda o artigo: **Repasses** (liberação 2 dias após o evento, repasse semanal, RN17) · **Reembolsar pedido** (RN28, RN29; exemplo do parcial do #1042) · **Por que não posso publicar** (RN01, RN04, RN07, RN08; exemplo do Workshop) · **Pausar ou encerrar vendas** (RN18, comparado com cancelar/RN25) · **Convidar para a equipe** (RN33; papéis com o mesmo texto de CF-A5) | V3 |
 | MA-A5 | Falar com o suporte | Assunto, evento e pedido relacionados, mensagem (até 2.000 caracteres), anexo (JPG, PNG, PDF até 10 MB), histórico de chamados | V3 / anexo: V3 |
 | MA-A6 | Mensagem enviada | Protocolo do chamado; resposta por e-mail em até 1 dia útil | V6 (e-mail) |
+| MA-A7 | Termos e privacidade | Termos de uso, Política de privacidade (LGPD), Política de reembolso e Taxas; contato do encarregado (DPO) | V3 |
+| MA-A8 | Documento | Termos de uso e Política de privacidade; texto coerente com RN17, RN25, RN27, RN28 e RN42 | V3 |
 
 #### 📱 Perfil — `PF`
 
