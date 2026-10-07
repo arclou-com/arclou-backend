@@ -220,6 +220,7 @@ Duas superfícies, dois cadastros: o **site cria contas `PARTICIPANT`**; o **app
 | AC-B3 | Criar conta de organizador | Dados pessoais + produtora (nome, cidade); cria `ORGANIZER` como Proprietário da produtora (RN34) | V4 |
 | AC-B4 | Aceitar convite | E-mail do convite é fixo; papel e permissões visíveis antes de aceitar; convite expira em 7 dias (RN33) | V4 |
 | AC-B5 | Esqueci a senha | Envia o link; a nova senha é criada na web (AC-A5); 2FA continua exigida depois | V4 |
+| AC-B6 | Confirmar e-mail | Código de 6 dígitos após criar a conta no app (RN32); depois leva ao primeiro acesso (PN-A1) | V4 / V6 |
 
 ### 4.4 Check-in (página 📱 Check-in) — `CK`
 
