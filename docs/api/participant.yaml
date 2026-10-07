@@ -481,10 +481,11 @@ paths:
     post:
       tags: [Orders]
       operationId: requestMyRefund
-      summary: Pedir reembolso (RN24 — até 7 dias antes do evento)
+      summary: Pedir reembolso (PT-C6 → PT-C7, RN24 — até 7 dias antes do evento)
       description: |
         Reembolsa os tickets escolhidos (ou todos) pelo mesmo meio de pagamento, com a taxa (RN28/RN29).
-        Ticket `USED` ou transferido não entra. **Tela ainda não desenhada** — ver `participante.md`.
+        Ticket `USED` ou transferido não entra. Fora do prazo (`refundableUntil`), o site nem chama:
+        mostra PT-C8. Se chamar mesmo assim, `409 REFUND_WINDOW_CLOSED`.
       x-since: V5
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -499,7 +500,10 @@ paths:
                   type: array
                   description: Vazio ou ausente = pedido inteiro.
                   items: { type: string }
-                reason: { type: string, enum: [CANT_ATTEND, BOUGHT_BY_MISTAKE, OTHER] }
+                reason:
+                  type: string
+                  enum: [CANT_ATTEND, BOUGHT_BY_MISTAKE, EVENT_CHANGED, OTHER]
+                  description: 'Campo "Motivo" (PT-C6): Não vou poder ir · Comprei por engano · O evento mudou · Outro.'
       responses:
         '201':
           description: Reembolso iniciado.
@@ -1219,10 +1223,31 @@ components:
               type: array
               items: { $ref: '#/components/schemas/MyTicketSummary' }
             refundedAmount: { $ref: '#/components/schemas/Money' }
-            refundableUntil: { type: [string, 'null'], format: date-time, description: RN24 }
+            refundableUntil: { type: [string, 'null'], format: date-time, description: 'RN24 — depois disso, PT-C8.' }
+            transferableUntil: { type: [string, 'null'], format: date-time, description: RN23 — oferecido na PT-C8. }
+            refunds:
+              type: array
+              description: PT-C7 — reembolsos pedidos pelo comprador ou feitos pela produtora.
+              items: { $ref: '#/components/schemas/MyRefund' }
             cancellationReason:
               type: [string, 'null']
               enum: [PAYMENT_EXPIRED, CARD_DECLINED, EVENT_CANCELLED, REFUNDED, ORGANIZER, null]
+
+    MyRefund:
+      type: object
+      required: [id, amount, status, requestedAt, ticketIds]
+      properties:
+        id: { type: string }
+        amount: { $ref: '#/components/schemas/Money' }
+        ticketIds:
+          type: array
+          items: { type: string }
+        status: { type: string, enum: [PROCESSING, DONE, FAILED] }
+        destination: { type: string, example: Mastercard ••••4417, description: Mesmo meio do pagamento. }
+        requestedBy: { type: string, enum: [BUYER, ORGANIZER, EVENT_CANCELLED] }
+        requestedAt: { type: string, format: date-time }
+        expectedBy: { type: string, format: date, description: Até 7 dias úteis. }
+        completedAt: { type: [string, 'null'], format: date-time }
 
     # ─── Tickets ───
     MyTicketSummary:
@@ -1236,6 +1261,9 @@ components:
         status: { $ref: '#/components/schemas/TicketStatus' }
         requiresDocument: { type: boolean }
         transferred: { type: boolean }
+        paidAmount:
+          $ref: '#/components/schemas/Money'
+          description: 'Preço + taxa deste ingresso — valor devolvido se for reembolsado (PT-C6: "R$ 54,00").'
     TicketQr:
       type: object
       required: [payload, format, issuedAt]

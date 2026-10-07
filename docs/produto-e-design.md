@@ -215,6 +215,9 @@ Aba **Mais** do Tab bar: conta, produtora e suporte. O perfil e o "Sair da conta
 | PT-C3 | Meus pedidos | `/meus-pedidos` | Consulta de pedidos por status (CA15) | V4 |
 | PT-C4 | Transferir ingresso | modal em `/meus-ingressos/<id>` | RN23 | V4 |
 | PT-C5 | Ingresso transferido | `/meus-ingressos/<id>` | Ticket deixa a conta de quem transferiu | V4 |
+| PT-C6 | Pedir reembolso | modal em `/meus-ingressos/<id>` | Até 7 dias antes (RN24); escolhe os ingressos (parcial — RN29); devolve ingressos + taxa pelo mesmo meio (RN28); ingressos cancelados voltam ao estoque | V5 |
+| PT-C7 | Reembolso solicitado | `/meus-pedidos/<n>/reembolso` | Valor, destino e previsão (até 7 dias úteis); ingressos `CANCELLED` | V5 |
+| PT-C8 | Reembolso indisponível | modal em `/meus-ingressos/<id>` | Prazo da RN24 encerrado; oferece transferir (RN23) | V5 |
 
 ### 4.3 Acesso (página 🔐 Acesso) — `AC`
 
@@ -276,7 +279,7 @@ Estas regras nasceram do design. **Nenhuma entra na V1.** Cada uma será refinad
 | **RN21 — Expiração de pedido pendente** | Pedido `PENDING` é cancelado automaticamente: Pix após 30 minutos; boleto no vencimento. O boleto precisa vencer com tempo de compensação antes do evento. Pagamento recebido depois do cancelamento é devolvido automaticamente. | PT-B3, PT-B7, PT-B9 | V5 / V6 |
 | **RN22 — Fila de espera** | Configurada **por tipo de ingresso** (padrão para tipos novos em CF-A2). Quando um tipo com fila esgota, o participante entra informando a quantidade (até o limite por pedido, RN19); nada é cobrado. Quando a quantidade é liberada (reembolso, pedido expirado), a fila é atendida **em ordem**: a pessoa é avisada por e-mail e tem **30 minutos de reserva exclusiva** (RN20); se não comprar, a vez passa para a próxima e ela sai da fila. Na reserva da fila, só Pix e cartão (boleto não cabe em 30 min). Se as vendas terminarem, a fila é encerrada. | EV-B7, EV-C2, CF-A2, PT-B8, PT-B10, PT-B11 | V6 (concorrência da reserva: V7) |
 | **RN23 — Transferência de ingresso** | O titular pode transferir um ticket para outra pessoa (nome + e-mail) até 24 h antes do evento. O QR anterior é invalidado; a transferência não pode ser desfeita por quem transferiu. | PT-C2, PT-C4, PT-C5 | V4 |
-| **RN24 — Política de reembolso** | O participante pode pedir reembolso até 7 dias antes do evento (padrão configurável). | CF-A2, PT-B2 | V5 |
+| **RN24 — Política de reembolso** | O participante pode pedir reembolso até 7 dias antes do evento (padrão configurável), de todos ou de parte dos ingressos do pedido; recebe ingressos + taxa pelo mesmo meio de pagamento (como RN28/RN29). Fora do prazo, pode transferir (RN23). | CF-A2, PT-B2, PT-C2, PT-C6, PT-C7, PT-C8 | V5 |
 | **RN25 — Reembolso no cancelamento** | Cancelar um evento reembolsa todos os pedidos confirmados pelo mesmo meio de pagamento e avisa os participantes. | EV-D8 | V5 / V6 |
 | **RN26 — Titular por ingresso** | Cada ticket tem um titular (nome). Por padrão é o comprador; pode ser outra pessoa. | PT-B2, PT-C2, EV-C4 | V4 |
 | **RN27 — Exclusão de conta** | Conta de organizador só pode ser excluída sem eventos à venda, sem saldo a liberar e sem ser proprietária de equipe. Dados pessoais são apagados em até 30 dias (LGPD); registros fiscais são mantidos pelo prazo legal. | PF-A4 | V4 / V5 |
@@ -306,11 +309,7 @@ Estas regras nasceram do design. **Nenhuma entra na V1.** Cada uma será refinad
 
 ## 6. Decisões em aberto
 
-| Item | Situação | Versão |
-|---|---|---|
-| **Pedido de reembolso pelo participante (RN24)** | A regra e o endpoint existem (`POST /me/orders/{n}/refund-requests`, ver `docs/api/participante.md`), mas não há tela. Falta desenhar o fluxo no site (provável ponto de entrada: PT-C3 e PT-C2). | V5 |
-
-Novas dúvidas que surgirem no design ou na implementação entram aqui antes de virar Issue.
+Nenhuma decisão de produto em aberto no momento. Novas dúvidas que surgirem no design ou na implementação entram aqui antes de virar Issue.
 
 ---
 
@@ -319,7 +318,8 @@ Novas dúvidas que surgirem no design ou na implementação entram aqui antes de
 As telas usam um conjunto fixo de dados para que os números batam entre si. Use os mesmos valores em testes manuais e exemplos de documentação:
 
 - **Tech Summit 2026** — Publicado · seg, 12 out 2026, 09:00–18:00 · Expo Center Norte, São Paulo/SP · 500 ingressos, 412 vendidos · Pista R$ 60,00 (260/300) · VIP R$ 160,00 (92/100) · Estudante R$ 44,00 (60/100).
-- **Noite do Jazz** — Publicado, esgotado (180/180). **Meetup Backend BR** — Publicado, gratuito. **Workshop Java Moderno** — Rascunho. **Show Beneficente** — Cancelado. **DevConf 2026** — Encerrado.
+- **Noite do Jazz** — Publicado, esgotado (180/180) · dom, 25 out 2026, 20:00 · Teatro Bradesco, Belo Horizonte/MG · Inteira R$ 50,00. Reembolsos até 18 out, 20:00. **Meetup Backend BR** — Publicado, gratuito. **Workshop Java Moderno** — Rascunho. **Show Beneficente** — Cancelado. **DevConf 2026** — Encerrado.
 - **Pedido #1042** — Ana Souza, 2× VIP, R$ 320,00 (subtotal) / R$ 345,60 (com taxa), Pix, Confirmado; tickets #10421 (Ana Souza) e #10422 (Bruno Souza).
 - **Outros pedidos do Tech Summit** — #1041 Léo Martins, 1× Pista, R$ 60,00, boleto, Pendente · #1040 Carla Dias, 4× Pista, R$ 240,00 · #1039 Rafael Lima, 1× Estudante, R$ 44,00 · #1038 Bruno Alves, 1× VIP + 1× Pista, R$ 220,00 · #1037 Marina Costa, 2× Pista, R$ 120,00, Cancelado (cartão recusado).
+- **Pedidos da Ana Souza no site (PT-C3):** #1042 Tech Summit (Pix, confirmado — prazo de reembolso encerrado em 05 out, PT-C8) · #0987 Meetup Backend BR (gratuito) · #0933 Noite do Jazz, 2× Inteira, Mastercard ••••4417, R$ 108,00, 20 set (tickets #09331 Ana Souza e #09332 Bruno Souza — exemplo do reembolso PT-C6/C7) · #0931 Noite do Jazz, Pix expirado · #0815 DevConf 2026.
 - **Pendentes da produtora:** 14 (6 do Tech Summit + 8 do Noite do Jazz), número usado no alerta do Painel e na aba Pedidos.

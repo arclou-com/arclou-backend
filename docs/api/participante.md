@@ -151,7 +151,9 @@ Pedido #1042: 2× VIP de R$ 160,00 + taxa de 8% = **R$ 345,60**. No cartão parc
 | PT-C3 Meus pedidos | `GET /me/orders?status=` · `GET /me/orders/{n}` · `GET /me/orders/{n}/receipt.pdf` |
 | PT-C4 Transferir ingresso | `POST /me/tickets/{id}/transfer` |
 | PT-C5 Ingresso transferido | `GET /me/tickets/{id}` (`transfer.direction = SENT`, sem `qr`) |
-| *(sem tela)* Pedir reembolso | `POST /me/orders/{n}/refund-requests` — ver "Lacuna" abaixo |
+| PT-C6 Pedir reembolso | `GET /me/orders/{n}` (`tickets[].paidAmount`, `refundableUntil`, cartão) · `POST /me/orders/{n}/refund-requests` |
+| PT-C7 Reembolso solicitado | resposta do pedido de reembolso (`refunds[]`: valor, destino, `requestedAt`, `expectedBy`) |
+| PT-C8 Reembolso indisponível | sem chamada: `refundableUntil` já passou; oferece transferir até `transferableUntil` |
 
 ### Acesso (AC-A)
 
@@ -164,9 +166,13 @@ Pedido #1042: 2× VIP de R$ 160,00 + taxa de 8% = **R$ 345,60**. No cartão parc
 | AC-A6 Erro ao entrar | `401` genérico · `423` com `retryAfterSeconds` (RN30) |
 | AC-A7 Confirmar e-mail | `POST /auth/email/verify` · `POST /auth/email/resend` |
 
-## Lacuna conhecida
+## Reembolso pelo participante (RN24)
 
-**Pedido de reembolso pelo participante (RN24):** a regra existe e o endpoint está no contrato, mas o fluxo não foi desenhado. Registrado em `produto-e-design.md` §6. Até a tela existir, o reembolso é feito pela produtora (PD-A4).
+Entrada: botão "Pedir reembolso" na PT-C2.
+
+- **Dentro do prazo** (`refundableUntil`, 7 dias antes): PT-C6. A pessoa escolhe os ingressos (cada um mostra `paidAmount` = preço + taxa) e o motivo, e confirma. Reembolso parcial mantém o pedido `CONFIRMED` (RN29); todos os ingressos = pedido `CANCELLED` (RN28). Os ingressos voltam ao estoque e a fila de espera é avisada (RN22).
+- **Depois:** PT-C7 mostra valor, destino (mesmo meio do pagamento) e previsão (até 7 dias úteis).
+- **Fora do prazo:** PT-C8, sem chamada à API. Oferece transferir (RN23) e lembra que cancelamento do evento reembolsa automaticamente (RN25).
 
 ## Fora do escopo
 
