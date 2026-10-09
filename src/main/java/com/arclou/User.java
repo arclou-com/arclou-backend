@@ -1,17 +1,20 @@
 package com.arclou;
 
-public class User {
-    private Integer id;
-    private String name;
-    private String email;
+import java.util.concurrent.atomic.AtomicLong;
 
-    public User(Integer id, String name, String email) {
-        this.id = id;
+public class User {
+    private static final AtomicLong count = new AtomicLong(0);
+
+    private final Long id = count.incrementAndGet();
+    private final String name;
+    private final String email;
+
+    public User(String name, String email) {
         this.name = name;
         this.email = email;
     }
 
-    public Integer getId() {
+    public Long getId() {
         return id;
     }
 

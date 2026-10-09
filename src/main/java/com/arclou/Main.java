@@ -46,16 +46,17 @@ public class Main {
                     System.out.print("Local: ");
                     String local = sc.nextLine();
 
-                    event[count] = new Event(name, date, local, new User(count, organizerName, organizerEmail));
+                    event[count] = new Event(name, date, local, new User(organizerName, organizerEmail));
                     System.out.println("Evento registrado com sucesso: " + event[count].getName() + " | " + event[count].getDate() + " | " + event[count].getLocal());
                     count++;
                 } else if (option == 2) {
                     if (count > 0) {
                         System.out.println("Eventos cadastrados:");
                         for (int i=0; i < count; i++ ) {
-                            System.out.println("Nome: " + event[i].getName() + ", Data: " + event[i].getDate() + ", Local: " + event[i].getLocal());
+                            System.out.println("Id: " + event[i].getId() + ", Nome: " + event[i].getName() + ", Data: " + event[i].getDate() + ", Local: " + event[i].getLocal());
                             System.out.println("Dados do Organizador:");
                             System.out.println(event[i].getOrganizer().toString());
+                            System.out.println();
                         }
                     } else {
                         System.out.println("Nenhum evento cadastrado.");
@@ -71,7 +72,7 @@ public class Main {
 
                         if (nameTransform.contains(searchNameTransform)) {
                             System.out.println("Info. do Evento:");
-                            System.out.println("Nome: " + event[i].getName() + ", Data: " + event[i].getDate() + ", Local: " + event[i].getLocal());
+                            System.out.println("Id: " + event[i].getId() + ",Nome: " + event[i].getName() + ", Data: " + event[i].getDate() + ", Local: " + event[i].getLocal());
                             System.out.println("Dados do Organizador:");
                             System.out.println(event[i].getOrganizer().toString());
                             found = true;
