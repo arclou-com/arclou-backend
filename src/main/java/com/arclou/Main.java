@@ -72,7 +72,7 @@ public class Main {
 
                         if (nameTransform.contains(searchNameTransform)) {
                             System.out.println("Info. do Evento:");
-                            System.out.println("Id: " + event[i].getId() + ",Nome: " + event[i].getName() + ", Data: " + event[i].getDate() + ", Local: " + event[i].getLocal());
+                            System.out.println("Id: " + event[i].getId() + ", Nome: " + event[i].getName() + ", Data: " + event[i].getDate() + ", Local: " + event[i].getLocal());
                             System.out.println("Dados do Organizador:");
                             System.out.println(event[i].getOrganizer().toString());
                             found = true;

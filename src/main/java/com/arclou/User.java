@@ -3,9 +3,9 @@ package com.arclou;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class User {
-    private static final AtomicLong count = new AtomicLong(0);
+    private static long count = 0;
 
-    private final Long id = count.incrementAndGet();
+    private final Long id = ++count;
     private final String name;
     private final String email;
 
