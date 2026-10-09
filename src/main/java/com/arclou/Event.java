@@ -1,17 +1,26 @@
 package com.arclou;
 
-public class Event {
-    private String name;
-    private String date;
-    private String local;
+import java.util.concurrent.atomic.AtomicLong;
 
-    private User organizer;
+public class Event {
+    private static long count = 0;
+
+    private final Long id = ++count;
+    private final String name;
+    private final String date;
+    private final String local;
+
+    private final User organizer;
 
     public Event(String name, String date, String local, User organizer) {
         this.name = name;
         this.date = date;
         this.local = local;
         this.organizer = organizer;
+    }
+
+    public Long getId() {
+        return id;
     }
 
     public String getName() {
